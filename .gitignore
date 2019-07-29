@@ -1,0 +1,14 @@
+arma
+dpdfLib
+#fastnlo
+fastnloBuild
+fastnloInterfaceBuild
+PlottingHelper
+nlojetBuild
+nlojet
+*~
+*.o
+*.swp
+*.swo
+*.swo
+
