@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
+fileName = "data16e"
+
 import ROOT
 
 import sys
 from math import sqrt
 
-def readTable():
+def readTable(fName):
     sigmaTab = {}
     #Loop over files
-    fp = open('13TeVorg.txt', 'r')
+    fp = open(fName, 'r')
     n = 0
     arr = []
     isIn = False
@@ -40,7 +42,7 @@ def readTable():
         
     return sigmaTab
 
-sigmaTab = readTable()
+sigmaTab = readTable(fileName+'.txt')
 
 print sigmaTab
 
@@ -58,7 +60,7 @@ def vec(vv):
     return vvv
 
 
-fOut = ROOT.TFile('dataEarly.root', 'RECREATE')
+fOut = ROOT.TFile(fileName+'.root', 'RECREATE')
 
 for el in sigmaTab:
     #get binning
@@ -73,12 +75,12 @@ for el in sigmaTab:
 
     #Stat errors
     for i, x in enumerate(sigmaTab[el]):
-        hStat.SetBinContent(i, x[2])
-        hStat.SetBinError(i,   x[3])
+        hStat.SetBinContent(i+1, x[2])
+        hStat.SetBinError(i+1,   x[3])
 
     for i, x in enumerate(sigmaTab[el]):
-        hSysUp.SetBinContent(i, x[2] + x[4])
-        hSysDn.SetBinContent(i, x[2] - x[4])
+        hSysUp.SetBinContent(i+1, x[2] + x[4])
+        hSysDn.SetBinContent(i+1, x[2] - x[4])
 
     hStat.Write('hStat_y'+str(int(2*el)))
     hSysUp.Write('hSysUp_y'+str(int(2*el)))
