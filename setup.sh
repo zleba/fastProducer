@@ -10,3 +10,4 @@ export PROJECT_DIR=$PWD
 
 LD_LIBRARY_PATH=$PWD/nlojetBuild/lib:$LD_LIBRARY_PATH
 PATH=$PWD/nlojetBuild/bin:$PATH
+PATH=$PWD/fastnloBuild/bin/:$PATH

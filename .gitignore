@@ -3,6 +3,7 @@ dpdfLib
 #fastnlo
 fastnloBuild
 fastnloInterfaceBuild
+fastnloInterface
 PlottingHelper
 nlojetBuild
 nlojet
