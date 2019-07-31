@@ -19,6 +19,7 @@
 #include "TH1D.h"
 #include "TCanvas.h"
 #include "TStyle.h"
+#include "TFile.h"
 
 #include "plottingHelper.h"
 using namespace PlottingHelper;
@@ -74,7 +75,13 @@ vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo)
 
         hists.push_back(h);
     }
-    cout << "Second part done" << endl;
+
+    /*
+    cout << "Second part done Start" << endl;
+    for(int i = 0; i < hists.size(); ++i)
+        hists[i]->Print();
+    cout << "Second part done End " << hists.size() <<  endl;
+    */
 
     return hists;
 }
@@ -92,9 +99,11 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOLHAPDF &fnlo)
                               { 0.5, 1} };
 
 
-    vector<vector<TH1D*>> histos(scales.size());
+    vector<vector<TH1D*>> histos;
     for(auto  s : scales) {
         fnlo.SetScaleFactorsMuRMuF(s[0], s[1]);
+        auto hh = readHisto(fnlo);
+        //cout << "RAdek before " << hh.size() << endl;
         histos.push_back(readHisto(fnlo));
     }
 
@@ -103,11 +112,12 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOLHAPDF &fnlo)
     vector<TH1D*> hUp(histos[0].size());
     vector<TH1D*> hDn(histos[0].size());
 
+
     for(int y = 0; y < histos[0].size(); ++y) { //loop over y-bins
 
         hCnt[y] = (TH1D*) histos[0][y]->Clone(rn());
-        hUp[y] = (TH1D*) histos[0][y]->Clone(rn());
-        hDn[y] = (TH1D*) histos[0][y]->Clone(rn());
+        hUp[y]  = (TH1D*) histos[0][y]->Clone(rn());
+        hDn[y]  = (TH1D*) histos[0][y]->Clone(rn());
 
         for(int i = 1; i <= histos[0][y]->GetNbinsX(); ++i) { //loop over pt-bins
             double cnt = histos[0][y]->GetBinContent(i);
@@ -124,6 +134,11 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOLHAPDF &fnlo)
 
 
     }
+
+    hCnt[0]->Print();
+    hUp[0]->Print();
+    hDn[0]->Print();
+
     return {hCnt, hUp, hDn};
 }
 
@@ -134,7 +149,7 @@ vector<vector<TH1D*>> getPDFuncHistos(fastNLOLHAPDF &fnlo)
 
     int nPDFs = fnlo.GetNPDFMembers();
 
-    vector<vector<TH1D*>> histos(nPDFs);
+    vector<vector<TH1D*>> histos;
     for(int i = 0; i < nPDFs; ++i) {
         fnlo.SetLHAPDFMember(i);
         histos.push_back(readHisto(fnlo));
@@ -207,11 +222,16 @@ void printHisto(TH1D *h)
 }
 
 
-void SaveHistos(vector<vector<TH1D*>> hist, TString tag)
+void SaveHistos(vector<vector<TH1D*>> hist,  TString tag)
 {
-
-
-
+    vector<TString> sysTag = {"Cnt", "Up", "Dn"};
+    for(int s = 0; s < hist.size(); ++s) {
+        for(int y = 0; y < hist[0].size(); ++y) {
+            TString n = tag +"_"+ sysTag[s] +"_"+ Form("y%d", y);
+            hist[s][y]->SetName(n);
+            hist[s][y]->Write(n);
+        }
+    }
 }
 
 
@@ -242,9 +262,22 @@ int main(int argc, char** argv){
     fnloNew.SetUnits(fastNLO::kPublicationUnits);
 
 
-    //vector<vector<TH1D*>> histNew = getScaleuncHistos(fnloNew);
-    vector<vector<TH1D*>> histNew =  getPDFuncHistos(fnloNew);
+    vector<vector<TH1D*>> histNewScl = getScaleuncHistos(fnloNew);
+    vector<vector<TH1D*>> histNewPDF = getPDFuncHistos(fnloNew);
+    vector<vector<TH1D*>> histOldScl = getScaleuncHistos(fnloOld);
+    vector<vector<TH1D*>> histOldPDF = getPDFuncHistos(fnloOld);
 
+    TFile *fOut = new TFile("cmsJets.root", "RECREATE");
+
+    SaveHistos(histNewPDF, "histNewCT14PDF");
+    SaveHistos(histNewScl, "histNewCT14Scl");
+    SaveHistos(histOldPDF, "histOldCT14PDF");
+    SaveHistos(histOldScl, "histOldCT14Scl");
+
+    //histNewScl[0][0]->Print("all");
+    //histNewScl[0][0]->Write();
+    fOut->Write();
+    fOut->Close();
 
     return 0;
 
