@@ -1,6 +1,7 @@
 arma
 dpdfLib
-#fastnlo
+fastnlo
+fastnloBack
 fastnloBuild
 fastnloInterfaceBuild
 fastnloInterface

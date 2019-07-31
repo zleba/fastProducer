@@ -122,8 +122,8 @@ int main(int argc, char** argv){
     //vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo, TString tabName, TString pdfName)
 
     //say::SetGlobalVerbosity(say::DEBUG);
-    fastNLOLHAPDF fnloOld("fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT10", 0);
-    fastNLOLHAPDF fnloNew("InclusiveNJets_fnl5362h_v23_fix.tab", "CT10", 0);
+    fastNLOLHAPDF fnloOld("fastTables/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT10", 0);
+    fastNLOLHAPDF fnloNew("fastTables/InclusiveNJets_fnl5362h_v23_fix.tab", "CT10", 0);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,0,true);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,1,true);
     fnloOld.SetUnits(fastNLO::kPublicationUnits);
@@ -139,20 +139,6 @@ int main(int argc, char** argv){
     vector<TH1D*> oldH = readHisto(fnloOld);
     vector<TH1D*> newH = readHisto(fnloNew);
 
-    //oldH[0]->Print("all");
-
-    //print histogra
-    /*
-    for(int i = 1; i < oldH[0]->GetNbinsX(); ++i) {
-        cout << i << " "<<  oldH[0]->GetBinLowEdge(i) <<" "<<  oldH[0]->GetXaxis()->GetBinUpEdge(i) <<" "<< oldH[0]->GetBinContent(i) <<  endl;
-    }
-
-    for(int i = 1; i < newH[0]->GetNbinsX(); ++i) {
-        cout << i << " "<<  newH[0]->GetBinLowEdge(i) <<" "<<  newH[0]->GetXaxis()->GetBinUpEdge(i) <<" "<< newH[0]->GetBinContent(i) <<  endl;
-    }
-
-    return 0;
-    */
 
 
     int yB = 2;

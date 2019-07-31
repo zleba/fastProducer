@@ -37,3 +37,33 @@ runFastNLO: runFastNLO.cc
 	-o $@
 
 
+checkTables: checkTables.cc
+	$(CC) -g  checkTables.cc $(LDFLAGS) -I../PlottingHelper/ \
+	$(ROOT_INCLUDE)  -I$(FastNLOInstallDir)/include -L$(FastNLOInstallDir)/lib -lfastnlotoolkit \
+	-L../PlottingHelper/ -lPlottingHelper -Wl,-rpath,../PlottingHelper   \
+	-I$(LHA_INCLUDE)     \
+	-L$(LHA_LIBS) -lLHAPDF \
+	-Wl,-rpath $(LHA_LIBS) \
+	$(ROOT_LIBS)   -Wl,-rpath $(FastNLOInstallDir)/lib \
+	-o $@
+
+
+plotJets: plotJets.cc
+	$(CC) -g  plotJets.cc $(LDFLAGS) -I../PlottingHelper/ \
+	$(ROOT_INCLUDE)  -I$(FastNLOInstallDir)/include -L$(FastNLOInstallDir)/lib -lfastnlotoolkit \
+	-L../PlottingHelper/ -lPlottingHelper -Wl,-rpath,../PlottingHelper   \
+	-I$(LHA_INCLUDE)     \
+	-L$(LHA_LIBS) -lLHAPDF \
+	-Wl,-rpath $(LHA_LIBS) \
+	$(ROOT_LIBS)   -Wl,-rpath $(FastNLOInstallDir)/lib \
+	-o $@
+
+calcTheory: calcTheory.cc
+	$(CC) -g  calcTheory.cc $(LDFLAGS) -I../PlottingHelper/ \
+	$(ROOT_INCLUDE)  -I$(FastNLOInstallDir)/include -L$(FastNLOInstallDir)/lib -lfastnlotoolkit \
+	-L../PlottingHelper/ -lPlottingHelper -Wl,-rpath,../PlottingHelper   \
+	-I$(LHA_INCLUDE)     \
+	-L$(LHA_LIBS) -lLHAPDF \
+	-Wl,-rpath $(LHA_LIBS) \
+	$(ROOT_LIBS)   -Wl,-rpath $(FastNLOInstallDir)/lib \
+	-o $@
