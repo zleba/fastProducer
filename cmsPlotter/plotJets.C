@@ -31,7 +31,7 @@ TGraphAsymmErrors *getBand(TH1D *hCnt, TH1D *hUp, TH1D *hDn)
 
 void plotRatio()
 {
-    TFile *fTh = TFile::Open("cmsJetsNLO.root");
+    TFile *fTh = TFile::Open("theorFiles/cmsJetsNLO.root");
     TFile *fD  = TFile::Open(Form("xFitterTables/data%s.root", year.Data()));
 
     for(int y = 0; y < 5; ++y) {
