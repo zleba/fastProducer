@@ -6,7 +6,7 @@ using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
 
-TString year = "16";
+TString year = "15";
 
 
 TGraphAsymmErrors *getBand(TH1D *hCnt, TH1D *hUp, TH1D *hDn)
@@ -28,10 +28,41 @@ TGraphAsymmErrors *getBand(TH1D *hCnt, TH1D *hUp, TH1D *hDn)
     return gr;
 }
 
+//Apply NP + EW corrections to theory
+void applyNPEW(TH1D *h, int y,  TString Year)
+{
+    TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
+
+    int tag = Year.Contains("15") ? 15 : 16;
+
+    TH1D *hEW = (TH1D*) fNPEW->Get(Form("ew%d_ak4_y%d", tag, y));
+    TH1D *hNP = (TH1D*) fNPEW->Get(Form("np%d_ak4_y%d", tag, y));
+
+    for(int i = 1; i <= h->GetNbinsX(); ++i) {
+        double pt  = h->GetBinCenter(i);
+        double v   = h->GetBinContent(i);
+        double err = h->GetBinError(i);
+
+        int iNP = hNP->FindBin(pt);
+        int iEW = hEW->FindBin(pt);
+
+        double np = hNP->GetBinContent(iNP);
+        double ew = hEW->GetBinContent(iEW);
+
+        v   *= np * ew;
+        err *= np * ew;
+
+        h->SetBinContent(i, v);
+        h->SetBinError(i, err);
+    }
+    fNPEW->Close();
+}
+
+
 
 void plotRatio()
 {
-    TFile *fTh = TFile::Open("theorFiles/cmsJetsNLO.root");
+    TFile *fTh    = TFile::Open("theorFiles/cmsJetsNLO.root");  //NLO predictions
     TFile *fD  = TFile::Open(Form("xFitterTables/data%s.root", year.Data()));
 
     for(int y = 0; y < 5; ++y) {
@@ -47,11 +78,16 @@ void plotRatio()
         TH1D *hThScD = (TH1D*) fTh->Get(tag+Form("CT14Scl_Dn_y%d",y));
         TH1D *hThPdfU = (TH1D*) fTh->Get(tag+Form("CT14PDF_Up_y%d",y));
         TH1D *hThPdfD = (TH1D*) fTh->Get(tag+Form("CT14PDF_Dn_y%d",y));
-        //hTh->Scale(0.5);
-        //hThScU->Scale(0.5);
-        //hThScD->Scale(0.5);
-        //hThPdfU->Scale(0.5);
-        //hThPdfD->Scale(0.5);
+
+        applyNPEW(hTh,    y, year);
+        applyNPEW(hThScU, y, year);
+        applyNPEW(hThScD, y, year);
+        applyNPEW(hThPdfU, y, year);
+        applyNPEW(hThPdfD, y, year);
+
+
+
+
 
         hStat->Divide(hTh); //normalize to theory
         hThScU->Divide(hTh); //normalize to theory
@@ -75,6 +111,8 @@ void plotRatio()
         hThScD->SetLineColor(kRed);
         hThPdfU->SetLineColor(kRed);
         hThPdfD->SetLineColor(kRed);
+        hThPdfU->SetLineStyle(2);
+        hThPdfD->SetLineStyle(2);
 
 
 
