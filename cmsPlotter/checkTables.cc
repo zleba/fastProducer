@@ -19,6 +19,7 @@
 #include "TH1D.h"
 #include "TCanvas.h"
 #include "TStyle.h"
+#include "TLine.h"
 
 #include "plottingHelper.h"
 using namespace PlottingHelper;
@@ -114,6 +115,10 @@ void printHisto(TH1D *h)
 
 //__________________________________________________________________________________________________________________________________
 
+
+vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
+
+
 int main(int argc, char** argv){
 	
 
@@ -128,8 +133,8 @@ int main(int argc, char** argv){
     //vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo, TString tabName, TString pdfName)
 
     //say::SetGlobalVerbosity(say::DEBUG);
-    fastNLOLHAPDF fnloOld("fastTables/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT10", 0);
-    fastNLOLHAPDF fnloNew("fastTables/InclusiveNJets_fnl5362h_v23_fix.tab", "CT10", 0);
+    fastNLOLHAPDF fnloOld("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT14nlo", 0);
+    fastNLOLHAPDF fnloNew("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "CT14nlo", 0);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,0,true);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,1,true);
     fnloOld.SetUnits(fastNLO::kPublicationUnits);
@@ -146,8 +151,10 @@ int main(int argc, char** argv){
     vector<TH1D*> newH = readHisto(fnloNew);
 
 
-    TCanvas *can = new TCanvas(rn(), "");
+    TCanvas *can = new TCanvas(rn(), "", 1000, 350);
     gStyle->SetOptStat(0);
+    SetLeftRight(0.07, 0.03);
+    SetTopBottom(0.05, 0.13);
 
     DividePad( {1,1,1,1,1}, {1});
 
@@ -160,10 +167,32 @@ int main(int argc, char** argv){
 
         can->cd(yB+1);
         gPad->SetLogx();
-        oldHH->Draw();
+        oldHH->Draw("][");
         GetYaxis()->SetRangeUser(0.99, 1.01);
-        GetXaxis()->SetTitle("p_{T} [GeV]");
+
+        if(yB == 4)
+            GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+        GetYaxis()->SetTitle("#sigma^{NLO2015} / #sigma^{NLO2016} ");
         GetXaxis()->SetRangeUser(100, 2600);
+        GetXaxis()->SetNoExponent();
+        GetXaxis()->SetMoreLogLabels();
+        SetFTO({16}, {10}, {1.25, 2.3, 0.3, 4.2});
+
+
+        TLegend *leg = newLegend(kPos8c);
+        leg->AddEntry((TObject*)nullptr, yBins[yB], "h");
+        if(yB == 0) {
+            leg->AddEntry((TObject*)nullptr, "AK4 jets", "h");
+            leg->AddEntry(oldHH, "NLOJET++", "l");
+            leg->AddEntry((TObject*)nullptr, "from fastNLO", "");
+        }
+        DrawLegends({leg}, false);
+
+        TLine *line = new TLine;
+        line->SetLineStyle(2);
+        line->DrawLine(100, 1.001, 2600, 1.001);
+        line->DrawLine(100, 0.999, 2600, 0.999);
+
 
         for(int i = 1; i < oldHH->GetNbinsX(); ++i) {
             cout << i << " "<<  oldHH->GetBinLowEdge(i) <<" "<<  oldHH->GetBinContent(i) <<" "<< newH[yB]->GetBinContent(i) <<  endl;

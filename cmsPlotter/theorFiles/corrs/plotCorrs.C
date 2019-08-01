@@ -56,7 +56,9 @@ struct corrPlotter {
     void plotYearComp(TString tag)
     {
         gStyle->SetOptStat(0);
-        TCanvas *can = new TCanvas(rn(), "",  1000, 300);
+        TCanvas *can = new TCanvas(rn(), "",  1000, 350);
+        SetLeftRight(0.05, 0.05);
+        SetTopBottom(0.05, 0.13);
 
         DividePad({1,1,1,1,1}, {1});
 
@@ -82,23 +84,37 @@ struct corrPlotter {
             h2->Draw();
             h1->Draw("same ][");
 
-            GetYaxis()->SetRangeUser(0.94, 1.06);
+            GetFrame()->SetTitle("");
+            GetYaxis()->SetRangeUser(0.93, 1.07);
 
-            TLegend *leg = newLegend(kPos8);
-            leg->AddEntry((TObject*)nullptr, "AK4 jets", "h");
+            if(y == 4)
+                GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+            GetXaxis()->SetNoExponent();
+            GetXaxis()->SetMoreLogLabels();
+            GetYaxis()->SetTitle("Correction");
+
+            SetFTO({16}, {10}, {1.25, 2.3, 0.3, 3.3});
+
+
+            TLegend *leg = newLegend(kPos7);
             leg->AddEntry((TObject*)nullptr, yBins[y], "h");
-            leg->AddEntry(h1, "2015", "l");
-            leg->AddEntry(h2, "2016", "l");
+            if(y == 0) {
+                leg->AddEntry((TObject*)nullptr, "AK4 jets", "h");
+                leg->AddEntry(h1, tag + " 2015", "l");
+                leg->AddEntry(h2, tag + " 2016", "l");
+            }
             DrawLegends({leg}, false);
         }
-        can->SaveAs("YearByYear"+tag+".pdf");
+        can->SaveAs("plots/YearByYear"+tag+".pdf");
     }
 
 
     void plotNPvsEW()
     {
         gStyle->SetOptStat(0);
-        TCanvas *can = new TCanvas(rn(), "",  1000, 300);
+        TCanvas *can = new TCanvas(rn(), "",  1000, 350);
+        SetLeftRight(0.05, 0.05);
+        SetTopBottom(0.05, 0.13);
 
         DividePad({1,1,1,1,1}, {1});
 
@@ -127,24 +143,32 @@ struct corrPlotter {
             ew->Draw("same ][");
             tot->Draw("hist same ][");
 
+            GetFrame()->SetTitle("");
             GetYaxis()->SetRangeUser(0.93, 1.07);
 
-            TLegend *leg = newLegend(kPos8);
-            leg->AddEntry((TObject*)nullptr, "AK4 jets", "h");
+            if(y == 4)
+                GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+            GetXaxis()->SetNoExponent();
+            GetXaxis()->SetMoreLogLabels();
+            GetYaxis()->SetTitle("Correction");
+
+            SetFTO({16}, {10}, {1.25, 2.3, 0.3, 3.3});
+
+
+
+
+            TLegend *leg = newLegend(kPos7);
             leg->AddEntry((TObject*)nullptr, yBins[y], "h");
-            leg->AddEntry(ew, "EW corr.", "l");
-            leg->AddEntry(np, "NP corr.", "l");
-            leg->AddEntry(tot, "NP+EW corr.", "l");
+            if(y == 0) {
+                leg->AddEntry((TObject*)nullptr, "AK4 jets", "h");
+                leg->AddEntry(ew, "EW corr.", "l");
+                leg->AddEntry(np, "NP corr.", "l");
+                leg->AddEntry(tot, "NP+EW corr.", "l");
+            }
             DrawLegends({leg}, false);
         }
-        can->SaveAs("NPvsEW.pdf");
+        can->SaveAs("plots/NPvsEW.pdf");
     }
-
-
-
-
-
-
 
 };
 
