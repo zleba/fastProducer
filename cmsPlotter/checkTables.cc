@@ -169,6 +169,7 @@ int main(int argc, char** argv){
         gPad->SetLogx();
         oldHH->Draw("][");
         GetYaxis()->SetRangeUser(0.99, 1.01);
+        GetFrame()->SetTitle("");
 
         if(yB == 4)
             GetXaxis()->SetTitle("Jet p_{T} (GeV)");

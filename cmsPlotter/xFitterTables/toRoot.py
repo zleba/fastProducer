@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-fileName = "data16e"
+fileName = "data16"
 
 import ROOT
 
@@ -31,6 +31,7 @@ def readTable(fName):
         sigma= l[5]
         stat = l[6]
         uncor= l[7]
+        #sigma *= 0.987;
 
         sys= l[10:]
         sysH = sqrt(sum([max(0, x)**2 for x in sys]))
