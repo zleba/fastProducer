@@ -22,6 +22,8 @@
 #include "TFile.h"
 
 #include "plottingHelper.h"
+#include "tools.h"
+
 using namespace PlottingHelper;
 
 
@@ -142,7 +144,9 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOAlphas &fnlo)
     return {hCnt, hUp, hDn};
 }
 
-vector<vector<TH1D*>> getAsScaleuncHistos()
+
+
+vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName)
 {
     //fnlo.SetLHAPDFMember(0);
 
@@ -154,12 +158,39 @@ vector<vector<TH1D*>> getAsScaleuncHistos()
                               { 2, 1},
                               { 0.5, 1} };
 
+    /*
+    map<TString, vector<double> > pdfAsVals;
+    pdfAsVals["CT14nlo"] = getRange(0.111, 0.123);
+    pdfAsVals["CT14nnlo"] = pdfAsVals["CT14nlo"];
+
+    pdfAsVals["HERAPDF20_NLO"] = getRange(0.111, 0.123);
+    pdfAsVals["HERAPDF20_NNLO"] = pdfAsVals["HERAPDF20_NLO"];
+
+    pdfAsVals["NNPDF31_nnlo"] = {0.112, 0.114, 0.116, 0.117, 0.118, 0.119, 0.120,  0.122};
+    */
+
 
     cout << "Radek " << endl;
     vector<vector<TH1D*>> histos;
-    for(double as = 0.111; as <= 0.1231; as += 0.001) {
+    //for(double as = 0.111; as <= 0.1231; as += 0.001) {
+    for(double as : pdfAsVals.at(pdfName)) {
         int asI = round(as * 1000);
-        fastNLOAlphas  fnlo("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", Form("CT14nlo_as_0%d",asI), 0);
+
+        TString tag;
+        if(pdfName == "CT14nlo")
+            tag = "CT14nlo_as_0";
+        else if(pdfName == "CT14nnlo")
+            tag = "CT14nnlo_as_0";
+        else if(pdfName == "HERAPDF20_NLO")
+            tag = "HERAPDF20_NLO_ALPHAS_";
+        else if(pdfName == "HERAPDF20_NNLO")
+            tag = "HERAPDF20_NNLO_ALPHAS_";
+        else if(pdfName == "NNPDF31_nnlo")
+            tag = "NNPDF31_nnlo_as_0";
+        else
+            exit(1);
+
+        fastNLOAlphas  fnlo("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", (tag + Form("%d", asI)).Data(), 0);
         fnlo.SetAlphasMz(as, true);
 
         cout << "Helenka " << as << endl;
@@ -170,7 +201,7 @@ vector<vector<TH1D*>> getAsScaleuncHistos()
             auto hh = readHisto(fnlo);
 
             for(int y = 0; y < 5; ++y)
-                hh[y]->SetTitle(Form("h_y%d_as0%d_scale%d", y, asI, sId));
+                hh[y]->SetTitle(pdfName + Form("_y%d_as0%d_scale%d", y, asI, sId));
 
             //cout << "RAdek before " << hh.size() << endl;
             histos.push_back(hh);
@@ -331,10 +362,20 @@ int main(int argc, char** argv){
     //vector<vector<TH1D*>> histOldScl = getScaleuncHistos(fnloOld);
     //vector<vector<TH1D*>> histOldPDF = getPDFuncHistos(fnloOld);
 
-    vector<vector<TH1D*>> histAsAll = getAsScaleuncHistos();
+    //vector<vector<TH1D*>> histAsCTnlo    = getAsScaleuncHistos("CT14nlo");
+    vector<vector<TH1D*>> histAsCTnnlo   = getAsScaleuncHistos("CT14nnlo");
+    //vector<vector<TH1D*>> histAsHERAnlo  = getAsScaleuncHistos("HERAPDF20_NLO");
+    vector<vector<TH1D*>> histAsHERAnnlo = getAsScaleuncHistos("HERAPDF20_NNLO");
+
+    vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
+
 
     TFile *fOut = new TFile("cmsJetsAsScan.root", "RECREATE");
-    SaveHistosByTitle(histAsAll);
+    //SaveHistosByTitle(histAsCTnlo);
+    SaveHistosByTitle(histAsCTnnlo);
+    //SaveHistosByTitle(histAsHERAnlo);
+    SaveHistosByTitle(histAsHERAnnlo);
+    SaveHistosByTitle(histAsNNPDF);
     fOut->Write();
     fOut->Close();
     exit(0);

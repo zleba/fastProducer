@@ -1,98 +1,14 @@
 R__ADD_INCLUDE_PATH($PlH_DIR/PlottingHelper)
 R__LOAD_LIBRARY($PlH_DIR/plottingHelper_C.so)
 
+#include "tools.h"
+
 #include "plottingHelper.h"
 using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
 
-TString year = "15";
-
-
-TGraphAsymmErrors *getBand(TH1D *hCnt, TH1D *hUp, TH1D *hDn)
-{
-    hUp->Divide(hCnt);
-    hDn->Divide(hCnt);
-
-    TGraphAsymmErrors *gr = new TGraphAsymmErrors(hCnt->GetNbinsX());
-
-    for(int i = 1; i <= hCnt->GetNbinsX(); ++i) {
-        double v1 = hUp->GetBinContent(i) - 1;
-        double v2 = hDn->GetBinContent(i) - 1;
-        double up = max(0., max(v1, v2));
-        double dn = max(0., max(-v1, -v2));
-
-        gr->SetPoint(i-1, hCnt->GetBinCenter(i), 1);
-        gr->SetPointError(i-1, hCnt->GetBinWidth(i)/2., hCnt->GetBinWidth(i)/2., up, dn);
-    }
-    return gr;
-}
-
-//Apply NP + EW corrections to theory
-void applyNPEW(TH1D *h, int y,  TString Year)
-{
-    TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
-
-    int tag = Year.Contains("15") ? 15 : 16;
-
-    TH1D *hEW = dynamic_cast<TH1D*>( fNPEW->Get(Form("ew%d_ak4_y%d", tag, y)));
-    TH1D *hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak4_y%d", tag, y)));
-    if(!hEW || !hNP) {
-        cout << "Histogram is missing in np_ew.root file" << endl;
-        exit(0);
-    }
-
-    for(int i = 1; i <= h->GetNbinsX(); ++i) {
-        double pt  = h->GetBinCenter(i);
-        double v   = h->GetBinContent(i);
-        double err = h->GetBinError(i);
-
-        int iNP = hNP->FindBin(pt);
-        int iEW = hEW->FindBin(pt);
-
-        double np = hNP->GetBinContent(iNP);
-        double ew = hEW->GetBinContent(iEW);
-
-        v   *= np * ew;
-        err *= np * ew;
-
-        h->SetBinContent(i, v);
-        h->SetBinError(i, err);
-    }
-    fNPEW->Close();
-}
-
-
-//Apply NNLO or NLL k-factor
-void applyKfactor(TH1D *h, int y,  TString Tag)
-{
-    TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
-
-    TH1D *hCorr = dynamic_cast<TH1D*>( fNPEW->Get(Tag + Form("_ak4_y%d",  y)));
-    if(!hCorr) {
-        cout << "Histogram not found :" << Tag + Form("_ak4_y%d",  y) << endl;
-        exit(0);
-    }
-
-    for(int i = 1; i <= h->GetNbinsX(); ++i) {
-        double pt  = h->GetBinCenter(i);
-        double v   = h->GetBinContent(i);
-        double err = h->GetBinError(i);
-
-        int iCorr = hCorr->FindBin(pt);
-
-        double corr = hCorr->GetBinContent(iCorr);
-
-        v   *= corr;
-        err *= corr;
-
-        h->SetBinContent(i, v);
-        h->SetBinError(i, err);
-    }
-    fNPEW->Close();
-}
-
-
+TString year = "16";
 
 
 vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
@@ -318,7 +234,7 @@ void compareRatio(TString year0, TString year1)
         GetYaxis()->SetTitle("Ratio to NLOJet++ CT14");
         GetYaxis()->SetRangeUser(0.1, 2.5);
 
-        if(year0 == "16" && year1 == "16e" || true) {
+        if((year0 == "16" && year1 == "16e") || true) {
             if(y == 0) GetXaxis()->SetRangeUser(97, 3103);
             if(y == 1) GetXaxis()->SetRangeUser(97, 2940);
             if(y == 2) GetXaxis()->SetRangeUser(97, 2787);
@@ -350,6 +266,125 @@ void compareRatio(TString year0, TString year1)
     }
 }
 
+void plotAsScan(TString pdfName)
+{
+    TFile *fTh = TFile::Open("cmsJetsAsScan.root");  //NLO predictions
+    TFile *fD  = TFile::Open(Form("xFitterTables/data%s.root", year.Data()));
+
+    for(int y = 0; y < 5; ++y) {
+        TH1D *hStat = (TH1D*) fD->Get(Form("hStat_y%d",y));
+        TH1D *hSysUp = (TH1D*) fD->Get(Form("hSysUp_y%d",y));
+        TH1D *hSysDn = (TH1D*) fD->Get(Form("hSysDn_y%d",y));
+        TGraphAsymmErrors *gSys = getBand(hStat, hSysUp, hSysDn);
+
+        vector<TH1D*> vTh;
+        //for(int as = 111; as <= 123; ++as) {
+        int idCnt = 0;
+        for(const double & as : pdfAsVals.at(pdfName)) {
+            int asI = round(as*1000);
+            if(asI < 118) ++idCnt;
+            vTh.push_back( (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale0",y,asI) ));
+        }
+        //cout << "Id cnt is " << idCnt << endl;
+        //exit(0);
+
+        for( auto &h : vTh) {
+            applyNPEW(h,  y, year);
+            //applyKfactor(h, y, "kFactorNLL");
+            applyKfactor(h, y, "kFactorNNLO");
+        }
+
+        //applyNPEW(hTh,    y, year);
+        //applyNPEW(hThScU, y, year);
+        //applyNPEW(hThScD, y, year);
+        //applyNPEW(hThPdfU, y, year);
+        //applyNPEW(hThPdfD, y, year);
+
+        //applyKfactor(hThNLL, y, "kFactorNLL");
+        //applyKfactor(hThNNLO, y, "kFactorNNLO");
+
+
+
+        hStat->Divide(vTh[idCnt]); //normalize to theory
+
+        /*
+        if(y == 0) {
+            hStat->Print("all");
+            //vTh[7]->Print("all");
+            exit(0);
+        }
+        */
+
+
+        for(int i = 0; i < vTh.size(); ++i) {
+            if(i == idCnt) continue;
+            vTh[i]->Divide(vTh[idCnt]);
+        }
+
+        //hThNLL->Divide(hTh);
+        //hThNNLO->Divide(hTh);
+
+
+        TCanvas *can = new TCanvas(rn(), "", 550, 400);
+        SetTopBottom(0.1, 0.15);
+        gStyle->SetOptStat(0);
+        can->SetLogx();
+        can->SetTicky(1);
+
+        hStat->Draw("axis");
+
+        gSys->SetFillColor(kOrange);
+        gSys->SetLineColor(kBlack);
+        gSys->SetLineStyle(9);
+        gSys->SetLineWidth(2);
+        gSys->Draw("le2 same");
+
+
+
+        for(int i = 0; i < vTh.size(); ++i) {
+            if(i == idCnt) continue;
+            vTh[i]->Draw("hist same ][");
+        }
+
+
+        hStat->SetMarkerStyle(20);
+        hStat->SetLineColor(kBlack);
+        hStat->SetMarkerColor(kBlack);
+        hStat->Draw("e0  same");
+
+        GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+        GetXaxis()->SetNoExponent();
+        GetXaxis()->SetMoreLogLabels();
+        GetYaxis()->SetTitle("Ratio to NLOJet++ CT14");
+        GetYaxis()->SetRangeUser(0.1, 2.5);
+
+        SetFTO({20}, {10}, {1.15, 2.1, 0.3, 2.73});
+
+
+        /*
+        auto leg = newLegend(kPos7);
+
+        leg->SetNColumns(2);
+        //leg->SetMargin (0.4);
+
+        leg->AddEntry((TObject*)nullptr, "Inclusive jets R = 0.4", "");    leg->AddEntry(hThScU,  "NLO scale unc.", "l");
+        leg->AddEntry((TObject*)nullptr, yBins[y], "");                    leg->AddEntry(hThPdfU, "NLO PDF unc.", "l");
+
+        leg->AddEntry(hStat, "Data + (stat unc.)", "pe");                  leg->AddEntry(hThNLL,  "NLO+NLL", "l");
+        leg->AddEntry(gSys , "Exp. unc", "f");                              leg->AddEntry(hThNNLO, "NNLO", "l");
+
+        DrawLegends({leg}, true);
+        */
+
+        UpdateFrame();
+
+        can->Print(Form("plots/dataScan%s_y%d.pdf", year.Data(), y));
+    }
+}
+
+
+
+
 
 
 
@@ -359,6 +394,11 @@ void plotJets()
    //compareRatio("15", "16");
    
    //compareRatio("16", "15");
-   compareRatio("16", "16e");
+
+
+    //plotAsScan("HERAPDF20_NNLO");
+    plotAsScan("NNPDF31_nnlo");
+    //plotAsScan("CT14nnlo");
+   //compareRatio("16", "16e");
 
 }
