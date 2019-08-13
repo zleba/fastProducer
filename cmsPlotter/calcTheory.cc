@@ -14,7 +14,7 @@
 #include <cfloat>
 //#include "fastnlotk/fastNLODiffReader.h"
 //#include "fastNLODiffAlphas.h"
-#include "fastnlotk/fastNLOLHAPDF.h"
+#include "fastnlotk/fastNLOAlphas.h"
 
 #include "TH1D.h"
 #include "TCanvas.h"
@@ -36,7 +36,7 @@ TString rn() {return Form("%d",rand());}
 
 using namespace std;
 
-vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo)
+vector<TH1D*> readHisto(fastNLOAlphas &fnlo)
 {
     //fnlo.SetScaleFactorsMuRMuF(1.0, 1.0);
     fnlo.CalcCrossSection();
@@ -57,7 +57,7 @@ vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo)
         xSec[etaDn].push_back(xs[k]);
         //cout << etaAvg <<" "<<ptAvg << " "<< xs[0][k] <<" "<< xs[1][k] <<" "<< xs[2][k] <<" "<< xs[2][k]<<  endl;
     }
-    cout << "First part done" << endl;
+    //cout << "First part done" << endl;
 
     vector<TH1D*> hists;
     for(auto obj : bins) {
@@ -66,7 +66,7 @@ vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo)
 
         TH1D * h = new TH1D(rn(), Form("%g", etaDn), binning.size()-1, binning.data());
 
-        cout << etaDn << endl;
+        //cout << etaDn << endl;
 
         for(int i = 0; i < xSec.at(etaDn).size(); ++i) {
             h->SetBinContent(i+1, xSec.at(etaDn)[i]);
@@ -86,7 +86,7 @@ vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo)
     return hists;
 }
 
-vector<vector<TH1D*>> getScaleuncHistos(fastNLOLHAPDF &fnlo)
+vector<vector<TH1D*>> getScaleuncHistos(fastNLOAlphas &fnlo)
 {
     fnlo.SetLHAPDFMember(0);
 
@@ -142,7 +142,53 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOLHAPDF &fnlo)
     return {hCnt, hUp, hDn};
 }
 
-vector<vector<TH1D*>> getPDFuncHistos(fastNLOLHAPDF &fnlo)
+vector<vector<TH1D*>> getAsScaleuncHistos()
+{
+    //fnlo.SetLHAPDFMember(0);
+
+    vector<vector<double>> scales = { { 1, 1},
+                              { 2, 2},
+                              { 0.5, 0.5},
+                              { 1, 2},
+                              { 1, 0.5},
+                              { 2, 1},
+                              { 0.5, 1} };
+
+
+    cout << "Radek " << endl;
+    vector<vector<TH1D*>> histos;
+    for(double as = 0.111; as <= 0.1231; as += 0.001) {
+        int asI = round(as * 1000);
+        fastNLOAlphas  fnlo("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", Form("CT14nlo_as_0%d",asI), 0);
+        fnlo.SetAlphasMz(as, true);
+
+        cout << "Helenka " << as << endl;
+
+        int sId = 0;
+        for(auto  s : scales) {
+            fnlo.SetScaleFactorsMuRMuF(s[0], s[1]);
+            auto hh = readHisto(fnlo);
+
+            for(int y = 0; y < 5; ++y)
+                hh[y]->SetTitle(Form("h_y%d_as0%d_scale%d", y, asI, sId));
+
+            //cout << "RAdek before " << hh.size() << endl;
+            histos.push_back(hh);
+            ++sId;
+        }
+        cout << "Helenka end" << endl;
+    }
+    //exit(0);
+
+    return histos;
+}
+
+
+
+
+
+
+vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
 {
     fnlo.SetLHAPDFMember(0);
     fnlo.SetScaleFactorsMuRMuF(1, 1);
@@ -235,6 +281,22 @@ void SaveHistos(vector<vector<TH1D*>> hist,  TString tag)
 }
 
 
+void SaveHistosByTitle(vector<vector<TH1D*>> hist)
+{
+    for(int s = 0; s < hist.size(); ++s) {
+        for(int y = 0; y < hist[s].size(); ++y) {
+            //TString n = tag +"_"+ sysTag[s] +"_"+ Form("y%d", y);
+            TString n = hist[s][y]->GetTitle();
+            cout << "Pusa " << s <<" "<< y <<" : "<<  n << endl;
+            hist[s][y]->SetName(n);
+            hist[s][y]->Write(n);
+        }
+    }
+}
+
+
+
+
 //__________________________________________________________________________________________________________________________________
 
 int main(int argc, char** argv){
@@ -245,14 +307,15 @@ int main(int argc, char** argv){
   using namespace say;		// namespace for 'speaker.h'-verbosity levels
   using namespace fastNLO;	// namespace for fastNLO constants
 
-	SetGlobalVerbosity(DEBUG);
+	SetGlobalVerbosity(ERROR);
 
 
-    //vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo, TString tabName, TString pdfName)
+    //vector<TH1D*> readHisto(fastNLOAlphas &fnlo, TString tabName, TString pdfName)
 
     //say::SetGlobalVerbosity(say::DEBUG);
-    fastNLOLHAPDF fnloOld("fastTables/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT14nlo", 0);
-    fastNLOLHAPDF fnloNew("fastTables/InclusiveNJets_fnl5362h_v23_fix.tab", "CT14nlo", 0);
+    /*
+    fastNLOAlphas fnloOld("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT14nlo", 0);
+    fastNLOAlphas fnloNew("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "CT14nlo", 0);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,0,true);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,1,true);
     fnloOld.SetUnits(fastNLO::kPublicationUnits);
@@ -260,25 +323,34 @@ int main(int argc, char** argv){
     fnloNew.SetContributionON(fastNLO::kFixedOrder,0,true);
     fnloNew.SetContributionON(fastNLO::kFixedOrder,1,true);
     fnloNew.SetUnits(fastNLO::kPublicationUnits);
+    */
 
 
-    vector<vector<TH1D*>> histNewScl = getScaleuncHistos(fnloNew);
-    vector<vector<TH1D*>> histNewPDF = getPDFuncHistos(fnloNew);
-    vector<vector<TH1D*>> histOldScl = getScaleuncHistos(fnloOld);
-    vector<vector<TH1D*>> histOldPDF = getPDFuncHistos(fnloOld);
+    //vector<vector<TH1D*>> histNewScl = getScaleuncHistos(fnloNew);
+    //vector<vector<TH1D*>> histNewPDF = getPDFuncHistos(fnloNew);
+    //vector<vector<TH1D*>> histOldScl = getScaleuncHistos(fnloOld);
+    //vector<vector<TH1D*>> histOldPDF = getPDFuncHistos(fnloOld);
 
-    TFile *fOut = new TFile("cmsJets.root", "RECREATE");
+    vector<vector<TH1D*>> histAsAll = getAsScaleuncHistos();
 
-    SaveHistos(histNewPDF, "histNewCT14PDF");
-    SaveHistos(histNewScl, "histNewCT14Scl");
-    SaveHistos(histOldPDF, "histOldCT14PDF");
-    SaveHistos(histOldScl, "histOldCT14Scl");
+    TFile *fOut = new TFile("cmsJetsAsScan.root", "RECREATE");
+    SaveHistosByTitle(histAsAll);
+    fOut->Write();
+    fOut->Close();
+    exit(0);
+    return 0;
+
+    //SaveHistos(histNewPDF, "histNewCT14PDF");
+    //SaveHistos(histNewScl, "histNewCT14Scl");
+    //SaveHistos(histOldPDF, "histOldCT14PDF");
+    //SaveHistos(histOldScl, "histOldCT14Scl");
 
     //histNewScl[0][0]->Print("all");
     //histNewScl[0][0]->Write();
     fOut->Write();
     fOut->Close();
 
+    /*
     return 0;
 
     int nMem = fnloOld.GetNPDFMembers();
@@ -313,6 +385,7 @@ int main(int argc, char** argv){
 
     }
     can->SaveAs("tableCheck.pdf");
+    */
 
 
 
