@@ -8,7 +8,7 @@ using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
 
-TString year = "16";
+TString year = "16e";
 
 
 vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
@@ -397,8 +397,8 @@ void plotJets()
 
 
     //plotAsScan("HERAPDF20_NNLO");
-    plotAsScan("NNPDF31_nnlo");
-    //plotAsScan("CT14nnlo");
+    //plotAsScan("NNPDF31_nnlo");
+    plotAsScan("CT14nnlo");
    //compareRatio("16", "16e");
 
 }
