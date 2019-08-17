@@ -225,8 +225,10 @@ void compareRatio(TString year0, TString year1)
         hStat1->SetMarkerStyle(20);
         hStat1->SetLineColor(kBlue);
         hStat1->SetMarkerColor(kBlue);
+        //hStat1->Scale(0.8);
         hStat1->Draw("e0  same");
 
+        //hStat1->Print("all"); //Helenka printing
 
         GetXaxis()->SetTitle("Jet p_{T} (GeV)");
         GetXaxis()->SetNoExponent();
@@ -393,12 +395,12 @@ void plotJets()
    //plotRatio(); 
    //compareRatio("15", "16");
    
-   //compareRatio("16", "15");
+   compareRatio("16", "16m");
 
 
     //plotAsScan("HERAPDF20_NNLO");
     //plotAsScan("NNPDF31_nnlo");
-    plotAsScan("CT14nnlo");
+   // plotAsScan("CT14nnlo");
    //compareRatio("16", "16e");
 
 }

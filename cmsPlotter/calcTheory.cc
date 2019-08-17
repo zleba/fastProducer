@@ -190,21 +190,43 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName)
         else
             exit(1);
 
-        fastNLOAlphas  fnlo("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", (tag + Form("%d", asI)).Data(), 0);
+        TString whole = tag + Form("%d", asI);
+        
+        //cout << "Helenka " << pdfName << " " << as <<" "<< (asI == 118) << endl;
+
+        if(pdfName.Contains("CT14") && abs(as - 0.118) < 1e-6) {
+            whole = pdfName;
+        }
+        else if(pdfName.Contains("HERAPDF20_") && abs(as - 0.118) < 1e-6)
+            whole = pdfName + "_EIG";
+        else if(pdfName.Contains("NNPDF31") && abs(as - 0.118) < 1e-6)
+            whole = "NNPDF31_nnlo_as_0118_hessian";
+
+
+
+        fastNLOAlphas  fnlo("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", whole.Data(), 0);
         fnlo.SetAlphasMz(as, true);
 
-        cout << "Helenka " << as << endl;
+        //cout << "Helenka " << as << endl;
 
         int sId = 0;
         for(auto  s : scales) {
-            fnlo.SetScaleFactorsMuRMuF(s[0], s[1]);
-            auto hh = readHisto(fnlo);
+            int nPDFs = fnlo.GetNPDFMembers();
+            cout << sId << " "<< pdfName<<" : "<< whole <<" "<< nPDFs << endl;
+            if(s[0] != 1 || s[1] != 1 || abs(as - 0.118) > 1e-6)
+                nPDFs = 1;
+            for(int pdfId = 0; pdfId < nPDFs; ++pdfId) {
+                fnlo.SetLHAPDFMember(pdfId);
+                fnlo.SetScaleFactorsMuRMuF(s[0], s[1]);
+                auto hh = readHisto(fnlo);
 
-            for(int y = 0; y < 5; ++y)
-                hh[y]->SetTitle(pdfName + Form("_y%d_as0%d_scale%d", y, asI, sId));
+                for(int y = 0; y < 5; ++y)
+                    hh[y]->SetTitle(pdfName + Form("_y%d_as0%d_scale%d_pdf%d", y, asI, sId, pdfId));
 
-            //cout << "RAdek before " << hh.size() << endl;
-            histos.push_back(hh);
+                //cout << "RAdek before " << hh.size() << endl;
+                histos.push_back(hh);
+            }
+
             ++sId;
         }
         cout << "Helenka end" << endl;
@@ -362,19 +384,20 @@ int main(int argc, char** argv){
     //vector<vector<TH1D*>> histOldScl = getScaleuncHistos(fnloOld);
     //vector<vector<TH1D*>> histOldPDF = getPDFuncHistos(fnloOld);
 
-    //vector<vector<TH1D*>> histAsCTnlo    = getAsScaleuncHistos("CT14nlo");
-    vector<vector<TH1D*>> histAsCTnnlo   = getAsScaleuncHistos("CT14nnlo");
-    //vector<vector<TH1D*>> histAsHERAnlo  = getAsScaleuncHistos("HERAPDF20_NLO");
-    vector<vector<TH1D*>> histAsHERAnnlo = getAsScaleuncHistos("HERAPDF20_NNLO");
+    vector<vector<TH1D*>> histAsCTnlo    = getAsScaleuncHistos("CT14nlo");
+    //vector<vector<TH1D*>> histAsCTnnlo   = getAsScaleuncHistos("CT14nnlo");
+    vector<vector<TH1D*>> histAsHERAnlo  = getAsScaleuncHistos("HERAPDF20_NLO");
+    //vector<vector<TH1D*>> histAsHERAnnlo = getAsScaleuncHistos("HERAPDF20_NNLO");
 
+    //vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
     vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
 
 
     TFile *fOut = new TFile("cmsJetsAsScan.root", "RECREATE");
     //SaveHistosByTitle(histAsCTnlo);
-    SaveHistosByTitle(histAsCTnnlo);
+    SaveHistosByTitle(histAsCTnlo);
     //SaveHistosByTitle(histAsHERAnlo);
-    SaveHistosByTitle(histAsHERAnnlo);
+    SaveHistosByTitle(histAsHERAnlo);
     SaveHistosByTitle(histAsNNPDF);
     fOut->Write();
     fOut->Close();
