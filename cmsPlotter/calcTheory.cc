@@ -213,7 +213,7 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName)
         for(auto  s : scales) {
             int nPDFs = fnlo.GetNPDFMembers();
             cout << sId << " "<< pdfName<<" : "<< whole <<" "<< nPDFs << endl;
-            if(s[0] != 1 || s[1] != 1 || abs(as - 0.118) > 1e-6)
+            if(abs(as - 0.118) > 1e-6)
                 nPDFs = 1;
             for(int pdfId = 0; pdfId < nPDFs; ++pdfId) {
                 fnlo.SetLHAPDFMember(pdfId);

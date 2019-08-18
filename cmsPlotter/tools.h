@@ -15,6 +15,9 @@ inline std::vector<double> getRange(double asMin, double asMax, double st = 0.00
     return v;
 }
 
+
+static const vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 2500, 3103};
+
 static const std::map<TString, std::vector<double> > pdfAsVals =  {
     {"CT14nlo",  getRange(0.111, 0.123) },
     {"CT14nnlo", getRange(0.111, 0.123) },

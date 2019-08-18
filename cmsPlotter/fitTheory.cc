@@ -27,6 +27,7 @@
 #include "TVectorD.h"
 #include "TDecompSVD.h"
 #include "Math/Functions.h"
+#include "TF1.h"
 
 
 #include "plottingHelper.h"
@@ -48,80 +49,6 @@ using namespace std;
 const TString year = "2016";
 
 TFile *fTh = nullptr;
-
-vector<vector<TH1D*>> readHistos(TString pdfName, double as)
-{
-
-    vector<vector<TH1D*>> vTh;
-    vTh.resize(1);
-    if(pdfName.Contains("CT14")  && abs(as - 0.118) < 1e-6)
-        vTh.resize(57);
-
-    int idCnt = 0;
-    for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
-        for(int y = 0; y < 5; ++y) {
-            int asI = round(as*1000);
-            vTh[ipdf].push_back( (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale0_pdf%d",y,asI, ipdf) )->Clone(rn())  );
-        }
-    }
-
-    for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
-        for(int y = 0; y < 5; ++y) {
-            applyNPEW(vTh[ipdf][y],  y, year);
-            applyKfactor(vTh[ipdf][y], y, "kFactorNLL");
-            //applyKfactor(vTh[y], y, "kFactorNNLO");
-        }
-    }
-
-    return vTh;
-}
-
-/*
-vector<TH1D*> readHistos(fastNLOAlphas &fnlo)
-{
-    fnlo.SetScaleFactorsMuRMuF(1.0, 1.0);
-    fnlo.CalcCrossSection();
-    vector<double> xs = fnlo.GetCrossSection();
-    
-    map<double, vector<double>> bins, xSec;
-    for(int k = 0; k < xs.size(); ++k) {
-        //cout << "Helenka " << k <<" "<< fnlodiff.GetObsBinLoBound(k,0) << endl;
-        double etaDn = fnlo.GetObsBinLoBound(k,0);
-        double ptDn  = fnlo.GetObsBinLoBound(k,1);
-        double etaUp = fnlo.GetObsBinUpBound(k,0);
-        double ptUp  = fnlo.GetObsBinUpBound(k,1);
-
-        bins[etaDn].push_back(ptDn);
-        if(k == xs.size() - 1 || fnlo.GetObsBinLoBound(k,0) != fnlo.GetObsBinLoBound(k+1,0))
-            bins[etaDn].push_back(ptUp);
-
-        xSec[etaDn].push_back(xs[k]);
-        //cout << etaAvg <<" "<<ptAvg << " "<< xs[0][k] <<" "<< xs[1][k] <<" "<< xs[2][k] <<" "<< xs[2][k]<<  endl;
-    }
-    cout << "First part done" << endl;
-
-    vector<TH1D*> hists;
-    for(auto obj : bins) {
-        double etaDn = obj.first;
-        vector<double> binning = obj.second;
-
-        TH1D * h = new TH1D(rn(), Form("%g", etaDn), binning.size()-1, binning.data());
-
-        cout << etaDn << endl;
-
-        for(int i = 0; i < xSec.at(etaDn).size(); ++i) {
-            h->SetBinContent(i+1, xSec.at(etaDn)[i]);
-            h->SetBinError(i+1, 0);
-        }
-
-        hists.push_back(h);
-    }
-
-    return hists;
-}
-*/
-
-
 
 
 
@@ -191,6 +118,8 @@ struct asFitter {
     //vector<double> th;
     function<bool(point)> Cut;
 
+    map<TString, map<int, vector< vector<vector<TH1D*>> >>>  thHists;
+
     void readData(TString fName)
     {
 
@@ -238,17 +167,59 @@ struct asFitter {
     }
 
 
-    void fillTheory(TString pdfName, double as)
+    vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s)
     {
-        vector<vector<TH1D*>> thHist    = readHistos(pdfName, as);
-        vector<vector<TH1D*>> thHist118 = readHistos(pdfName, 0.118);
+
+        vector<vector<TH1D*>> vTh;
+        vTh.resize(1);
+        if(pdfName.Contains("CT14")  && abs(as - 0.118) < 1e-6)
+            vTh.resize(56+1);
+        else if(pdfName.Contains("HERAPDF")  && abs(as - 0.118) < 1e-6)
+            vTh.resize(28+1);
+        else if(pdfName.Contains("NNPDF31")  && abs(as - 0.118) < 1e-6)
+            vTh.resize(100+1);
+
+        int idCnt = 0;
+        for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
+            for(int y = 0; y < 5; ++y) {
+                int asI = round(as*1000);
+                vTh[ipdf].push_back( (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale%d_pdf%d",y,asI, s, ipdf) )->Clone(rn())  );
+            }
+        }
+
+        for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
+            for(int y = 0; y < 5; ++y) {
+                applyNPEW(vTh[ipdf][y],  y, year);
+                applyKfactor(vTh[ipdf][y], y, "kFactorNLL");
+                //applyKfactor(vTh[y], y, "kFactorNNLO");
+            }
+        }
+
+        return vTh;
+    }
+
+    void readAllTheory(TString pdfName) {
+        for(auto as: pdfAsVals.at(pdfName)) {
+            cout << pdfName <<" "<< as << endl;
+            int asI = round(as*1000);
+            thHists[pdfName][asI].resize(7);
+            for(int s = 0; s < 7; ++s)
+                thHists[pdfName][asI][s] = readHistos(pdfName, as, s);
+        }
+    }
+
+
+    void fillTheory(TString pdfName, double as, int scale = 0)
+    {
+        //vector<vector<TH1D*>> thHist    = readHistos(pdfName, as);
+        //vector<vector<TH1D*>> thHist118 = readHistos(pdfName, 0.118);
         
-        /*
-        if(abs(as - 0.118) < 1e-6)
-            thHist118 = thHist;
-        else
-            thHist118 = readHistos(pdfName, 0.118); //for pdf error
-        */
+        //cout << pdfName <<" "<< as <<" : begin"<< endl;
+        int asI = round(as*1000);
+        vector<vector<TH1D*>> thHist    = thHists.at(pdfName).at(asI)[scale];
+        vector<vector<TH1D*>> thHist118 = thHists.at(pdfName).at(118)[scale];
+        //cout << pdfName <<" "<< as <<" : end"<< endl;
+
         //thHist.resize(4);
 
         for(auto &p : data) {
@@ -257,6 +228,7 @@ struct asFitter {
             int binId = thHist[0][y]->FindBin(ptCnt);
             p.th = thHist[0][y]->GetBinContent(binId);
 
+            p.thErrs.clear();
 
             for(int i = 1; i < thHist118.size(); ++i) {
                 double thNom = thHist118[0][y]->GetBinContent(binId);
@@ -266,9 +238,6 @@ struct asFitter {
 
 
         }
-        for(auto & hVec : thHist)
-            for(auto & h : hVec)
-                delete h;
     }
 
 
@@ -380,16 +349,24 @@ struct asFitter {
         }
 
         //Fill pdf sys matrix
+
+        double Ccorr = 1;
+        if(dataF[0].thErrs.size() == 57) //CT14
+            Ccorr = 1*1./(2*1.64*1.64);
+        else if(dataF[0].thErrs.size() == 29) //HERAPDF
+            Ccorr = 1*1./(2);
+        else if(dataF[0].thErrs.size() == 101) //NNPDF31
+            Ccorr = 1*1./(2);
+
         TMatrixD CovPDF(dataF.size(), dataF.size());
         for(int k = 0; k < dataF[0].thErrs.size(); ++k) {
             for(int i = 0; i < dataF.size(); ++i) 
             for(int j = 0; j < dataF.size(); ++j) {
-                double C = 1*1./(2*1.6*1.6);
-                CovPDF(i,j) += dataF[i].thErrs[k]*dataF[j].thErrs[k]  *  dataF[i].sigma * dataF[j].sigma * C;
+                CovPDF(i,j) += dataF[i].thErrs[k]*dataF[j].thErrs[k]  *  dataF[i].sigma * dataF[j].sigma * Ccorr;
             }
         }
 
-        TMatrixD Cov = CovStat + CovSys + CovPDF;
+        TMatrixD Cov = CovStat + CovPDF;// + CovSys + CovPDF;
 
         double chi2 = 0;
         
@@ -473,9 +450,9 @@ struct asFitter {
     }
     */
 
-    double calcChi2(TString pdfName, double as) {
+    double calcChi2(TString pdfName, double as, int scale = 0) {
 
-        fillTheory(pdfName, as);
+        fillTheory(pdfName, as, scale);
 
         return getChi2cov();
     }
@@ -504,7 +481,7 @@ struct asFitter {
         //cout << as <<" : "<<chi2now << " / " << ndf << endl;
     }
 
-    void printAs(int y)
+    void printAsY(int y)
     {
         if(y < 0) Cut = [y](point p) { return ( abs(p.yMin) < 1.6 &&  p.sigma != 0);};
         else      Cut = [y](point p) { return ( abs(y*0.5-p.yMin) < 0.1 &&  p.sigma != 0);};
@@ -517,13 +494,119 @@ struct asFitter {
         }
     }
 
-    void fitAs(int y)
+    void printAsPt(int pt)
     {
+        const vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 2500, 3103};
+        double ptMin = ptBinsAs[pt];
+        double ptMax = ptBinsAs[pt+1];
+        Cut = [ptMin,ptMax](point p) { return (  abs(p.yMin) < 1.6 &&  p.sigma != 0   && p.ptMin >= ptMin -1 &&  p.ptMax <= ptMax +1     );};
+
+
         int ndf = getNpoints();
         for(double as = 0.113; as <= 0.122; as +=0.001) {
             //double chi2now = calcChi2("HERAPDF20_NLO", as);
             double chi2now = calcChi2("CT14nlo", as);
-            cout << y <<" "<< as <<" : "<<chi2now << " / " << ndf << endl;
+            cout << ptBinsAs[pt] <<" "<< as <<" : "<<chi2now << " / " << ndf << endl;
+        }
+    }
+
+    TGraph *getFitGraphPt(TString pdfName, int pt, int scale)
+    {
+        double ptMin = ptBinsAs[pt];
+        double ptMax = ptBinsAs[pt+1];
+        Cut = [ptMin,ptMax](point p) { return (  abs(p.yMin) < 1.6 &&  p.sigma != 0   && p.ptMin >= ptMin -1 &&  p.ptMax <= ptMax +1     );};
+
+        int ndf = getNpoints();
+
+        TGraph *gr = new TGraph();
+
+        int i = 0;
+        for(double as  : pdfAsVals.at(pdfName) ) {
+            double chi2now = calcChi2(pdfName, as, scale);
+            //cout << y <<" "<< as <<", scale="<<scale <<" : "<<chi2now << " / " << ndf << endl;
+            gr->SetPoint(i, as, chi2now);
+            ++i;
+        }
+        gr->Fit("pol4");
+        return gr;
+    }
+
+
+
+
+    TGraph *getFitGraph(TString pdfName, int y, int scale)
+    {
+        if(y < 0) Cut = [y](point p) { return ( abs(p.yMin) < 1.6 &&  p.sigma != 0);};
+        else      Cut = [y](point p) { return ( abs(y*0.5-p.yMin) < 0.1 &&  p.sigma != 0);};
+        //Cut = [y](point p) { return ( abs(p.yMin) < 1.6 &&  p.sigma != 0);};
+        int ndf = getNpoints();
+
+        TGraph *gr = new TGraph();
+
+        int i = 0;
+        for(double as  : pdfAsVals.at(pdfName) ) {
+            double chi2now = calcChi2(pdfName, as, scale);
+            cout << y <<" "<< as <<", scale="<<scale <<" : "<<chi2now << " / " << ndf << endl;
+            gr->SetPoint(i, as, chi2now);
+            ++i;
+        }
+        gr->Fit("pol4");
+        return gr;
+    }
+
+
+    void getAllChi2s()
+    {
+
+        vector<TString> pdfNames;
+        for(auto el :  thHists)
+            pdfNames.push_back(el.first);
+
+        TFile *fOut = TFile::Open("chi2.root", "RECREATE");
+        for(auto pdfName : pdfNames) {
+            for(int y = -1; y < 4; ++y) {
+                for(int s = 0; s < 7; ++s) {
+                    TGraph *gr = getFitGraph(pdfName, y, s);
+                    if(y == -1) gr->Write(pdfName + Form("_scale%d", s));
+                    else gr->Write(pdfName + Form("_Y%d_scale%d", y, s));
+                }
+            }
+        }
+
+        //Fill pT dep
+        for(auto pdfName : pdfNames) {
+            for(int pt = 0; pt < ptBinsAs.size()-1; ++pt) {
+                for(int s = 0; s < 7; ++s) {
+                    TGraph *gr = getFitGraphPt(pdfName, pt, s);
+                    gr->Write(pdfName + Form("_Pt%d_scale%d", pt, s));
+                }
+            }
+        }
+
+
+        fOut->Write();
+        fOut->Close();
+    }
+
+
+
+    void fitAs(TString pdfName, int y)
+    {
+        for(int s = 0; s < 7; ++s) {
+            TCanvas *c = new TCanvas(rn(), "can", 600, 600);
+            TGraph *gr = getFitGraph(pdfName, y, s);
+
+            TF1 *fit = gr->GetFunction("pol4");
+            double asMin = fit->GetMinimumX();
+            double chi2Min = fit->Eval(asMin);
+            double shLow  = fit->GetX(chi2Min + 1, 0, asMin);
+            double shHigh = fit->GetX(chi2Min + 1, asMin, 1);
+
+            double errL = asMin - shLow;
+            double errH = shHigh - asMin;
+            cout << "Helenka min " << asMin << " "<< errL <<" "<< errH << endl;
+            gr->Draw("a*");
+            c->SaveAs(Form("asFit%d.pdf", s));
         }
 
     }
@@ -541,13 +624,49 @@ int main(int argc, char** argv)
 
 	asFitter asfit;
     asfit.readData("xFitterTables/data16.txt");
+    asfit.readAllTheory("CT14nlo");
+    //asfit.readAllTheory("HERAPDF20_NLO");
+    //asfit.readAllTheory("NNPDF31_nnlo");
 
 
-    asfit.printAs(-1);
-    asfit.printAs(0);
-    asfit.printAs(1);
-    asfit.printAs(2);
-    asfit.printAs(3);
+
+    asfit.getAllChi2s();
+    return 0;
+
+    asfit.Cut = [](point p) { return ( abs(p.yMin) < 1.7 &&  p.sigma != 0);};
+    for(auto as: pdfAsVals.at("CT14nlo")) {
+        cout << "Helenka " << as <<" "<<  asfit.calcChi2("CT14nlo", as, 0) <<" : "<< asfit.getNpoints() << endl;
+    }
+
+    return 0;
+
+    for(int y = 0; y < 1; ++y) {
+        asfit.Cut = [y](point p) { return ( abs(y*0.5-p.yMin) < 0.1 &&  p.sigma != 0);};
+        for(auto as: pdfAsVals.at("CT14nlo")) {
+            cout << "Helenka " << y <<" "<<as <<" "<<  asfit.calcChi2("CT14nlo", as, 0) <<" : "<< asfit.getNpoints() << endl;
+        }
+    }
+
+
+
+
+    return 0;
+
+
+    asfit.fitAs("CT14nlo", -1);
+    return 0;
+
+    for(int i = 0; i < 11; ++i)
+        asfit.printAsPt(i);
+
+    return 0;
+
+
+    asfit.printAsY(-1);
+    asfit.printAsY(0);
+    asfit.printAsY(1);
+    asfit.printAsY(2);
+    asfit.printAsY(3);
 
     //asfit.printChi2Table();
     return 0;

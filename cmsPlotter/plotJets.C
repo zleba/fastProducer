@@ -8,7 +8,7 @@ using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
 
-TString year = "16e";
+TString year = "16";
 
 
 vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
@@ -279,22 +279,25 @@ void plotAsScan(TString pdfName)
         TH1D *hSysDn = (TH1D*) fD->Get(Form("hSysDn_y%d",y));
         TGraphAsymmErrors *gSys = getBand(hStat, hSysUp, hSysDn);
 
+	cout << "In the middle " <<y << endl;
         vector<TH1D*> vTh;
         //for(int as = 111; as <= 123; ++as) {
         int idCnt = 0;
         for(const double & as : pdfAsVals.at(pdfName)) {
             int asI = round(as*1000);
             if(asI < 118) ++idCnt;
-            vTh.push_back( (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale0",y,asI) ));
+            vTh.push_back( (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale0_pdf0",y,asI) ));
         }
+	cout << "In the middle2 " <<y << endl;
         //cout << "Id cnt is " << idCnt << endl;
         //exit(0);
 
         for( auto &h : vTh) {
             applyNPEW(h,  y, year);
-            //applyKfactor(h, y, "kFactorNLL");
-            applyKfactor(h, y, "kFactorNNLO");
+            applyKfactor(h, y, "kFactorNLL");
+            //applyKfactor(h, y, "kFactorNNLO");
         }
+	cout << "In the middle3 " <<y << endl;
 
         //applyNPEW(hTh,    y, year);
         //applyNPEW(hThScU, y, year);
@@ -357,30 +360,39 @@ void plotAsScan(TString pdfName)
         GetXaxis()->SetTitle("Jet p_{T} (GeV)");
         GetXaxis()->SetNoExponent();
         GetXaxis()->SetMoreLogLabels();
-        GetYaxis()->SetTitle("Ratio to NLOJet++ CT14");
-        GetYaxis()->SetRangeUser(0.1, 2.5);
+        GetYaxis()->SetTitle("Ratio to NLOJet++ " + pdfName);
+        GetYaxis()->SetRangeUser(0.5, 1.5);
 
         SetFTO({20}, {10}, {1.15, 2.1, 0.3, 2.73});
 
 
-        /*
+        if(y == 0) GetXaxis()->SetRangeUser(97, 3103);
+        else if(y == 1) GetXaxis()->SetRangeUser(97, 2940);
+        else if(y == 2) GetXaxis()->SetRangeUser(97, 2787);
+        else if(y == 3) GetXaxis()->SetRangeUser(97, 2000);
+
+
+
+        double asMin = pdfAsVals.at(pdfName)[0];
+        double asMax = pdfAsVals.at(pdfName)[pdfAsVals.at(pdfName).size()-1];
+
         auto leg = newLegend(kPos7);
 
         leg->SetNColumns(2);
         //leg->SetMargin (0.4);
 
-        leg->AddEntry((TObject*)nullptr, "Inclusive jets R = 0.4", "");    leg->AddEntry(hThScU,  "NLO scale unc.", "l");
-        leg->AddEntry((TObject*)nullptr, yBins[y], "");                    leg->AddEntry(hThPdfU, "NLO PDF unc.", "l");
+        leg->AddEntry((TObject*)nullptr, "Inclusive jets R = 0.4", "");    leg->AddEntry(vTh[idCnt],  "NLO+NLL+NP+EW", "l");
+        leg->AddEntry((TObject*)nullptr, yBins[y], "");                    leg->AddEntry(vTh[idCnt], Form("#alpha_{S} = %g - %g", asMin, asMax), "l");
 
-        leg->AddEntry(hStat, "Data + (stat unc.)", "pe");                  leg->AddEntry(hThNLL,  "NLO+NLL", "l");
-        leg->AddEntry(gSys , "Exp. unc", "f");                              leg->AddEntry(hThNNLO, "NNLO", "l");
+        leg->AddEntry(hStat, "Data + (stat unc.)", "pe");                  leg->AddEntry((TObject*)nullptr,  "", "");
+        leg->AddEntry(gSys , "Exp. unc", "f");                             leg->AddEntry((TObject*)nullptr, "", "");
 
         DrawLegends({leg}, true);
-        */
+
 
         UpdateFrame();
 
-        can->Print(Form("plots/dataScan%s_y%d.pdf", year.Data(), y));
+        can->Print(Form("plots/dataScan%s_y%d_%s.pdf", year.Data(), y, pdfName.Data()));
     }
 }
 
@@ -395,12 +407,13 @@ void plotJets()
    //plotRatio(); 
    //compareRatio("15", "16");
    
-   compareRatio("16", "16m");
+    //compareRatio("16", "16m");
+    //return 0;
 
 
-    //plotAsScan("HERAPDF20_NNLO");
-    //plotAsScan("NNPDF31_nnlo");
-   // plotAsScan("CT14nnlo");
+     plotAsScan("HERAPDF20_NLO");
+     plotAsScan("NNPDF31_nnlo");
+     plotAsScan("CT14nlo");
    //compareRatio("16", "16e");
 
 }
