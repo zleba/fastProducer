@@ -31,16 +31,28 @@ TGraphAsymmErrors *getBand(TH1D *hCnt, TH1D *hUp, TH1D *hDn)
 
 struct corrPlotter {
 
-    vector<TH1D*> ew15, ew16, np15, np16;
+    //vector<TH1D*> ew15, ew16, np15, np16;
+    map<TString,vector<TH1D*>> hCorrs;
+
+    const vector<TString> corrs = {"ew15_ak4", "ew16_ak4", "np15_ak4", "np16_ak4", "ew16_ak7"};
 
     void init() {
         TFile *file = TFile::Open("np_ew.root");
 
+        for(auto c : corrs) {
+            hCorrs[c].resize(5, nullptr); 
+            for(int y = 0; y < 5; ++y) {
+                hCorrs.at(c)[y] = dynamic_cast<TH1D*>(file->Get(c+Form("_y%d",   y)));
+                if(!hCorrs.at(c)[y]) {cout << "Reading issue" << endl; exit(1); }
+            }
+
+        }
+
+        /*
         ew15.resize(5, nullptr);
         ew16.resize(5, nullptr);
         np15.resize(5, nullptr);
         np16.resize(5, nullptr);
-
 
         for(int y = 0; y < 5; ++y) {
             ew15[y] = dynamic_cast<TH1D*>(file->Get(Form("ew15_ak4_y%d", y)));
@@ -48,10 +60,11 @@ struct corrPlotter {
             np15[y] = dynamic_cast<TH1D*>(file->Get(Form("np15_ak4_y%d", y)));
             np16[y] = dynamic_cast<TH1D*>(file->Get(Form("np16_ak4_y%d", y)));
         }
+        */
+
     }
 
     vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
-
 
     void plotYearComp(TString tag)
     {
@@ -65,12 +78,12 @@ struct corrPlotter {
         for(int y = 0; y < 5; ++y) {
             TH1D *h1, *h2;
             if(tag == "EW") {
-                h1 = ew15[y];
-                h2 = ew16[y];
+                h1 = hCorrs.at("ew15_ak4")[y];
+                h2 = hCorrs.at("ew16_ak4")[y];
             }
             else {
-                h1 = np15[y];
-                h2 = np16[y];
+                h1 = hCorrs.at("np15_ak4")[y];
+                h2 = hCorrs.at("np16_ak4")[y];
             }
             can->cd(y+1);
             gPad->SetLogx();
@@ -108,7 +121,7 @@ struct corrPlotter {
         can->SaveAs("plots/YearByYear"+tag+".pdf");
     }
 
-    void plotEW()
+    void plotEW(TString tag)
     {
         gStyle->SetOptStat(0);
         TCanvas *can = new TCanvas(rn(), "",  600, 600);
@@ -118,10 +131,13 @@ struct corrPlotter {
         SetLeftRight(0.15, 0.05);
         SetTopBottom(0.05, 0.13);
 
-        ew16[0]->SetLineColor(kBlack);
-        ew16[1]->SetLineColor(kRed);
-        ew16[2]->SetLineColor(kBlue);
-        ew16[3]->SetLineColor(kMagenta);
+        vector<TH1D*> &hEW = hCorrs.at(tag);
+
+
+        hEW[0]->SetLineColor(kBlack);
+        hEW[1]->SetLineColor(kRed);
+        hEW[2]->SetLineColor(kBlue);
+        hEW[3]->SetLineColor(kMagenta);
 
 
         for(int y = 0; y < 4; ++y) {
@@ -130,9 +146,9 @@ struct corrPlotter {
 
 
             if(y == 0)
-                ew16[y]->Draw("][");
+                hEW[y]->Draw("][");
             else
-                ew16[y]->Draw("][ same");
+                hEW[y]->Draw("][ same");
         }
         
         GetFrame()->SetTitle("");
@@ -154,15 +170,15 @@ struct corrPlotter {
         leg->AddEntry((TObject*)nullptr, "Dittmaier, Huss, Speckner", "h");
         leg->AddEntry((TObject*)nullptr, "Anti-k_{T} jets (R=0.4)", "h");
 
-        leg->AddEntry(ew16[0], "|y| < 0.5", "l");
-        leg->AddEntry(ew16[1], "0.5 < |y| < 1.0", "l");
-        leg->AddEntry(ew16[2], "1.0 < |y| < 1.5", "l");
-        leg->AddEntry(ew16[3], "1.5 < |y| < 2.0", "l");
+        leg->AddEntry(hEW[0], "|y| < 0.5", "l");
+        leg->AddEntry(hEW[1], "0.5 < |y| < 1.0", "l");
+        leg->AddEntry(hEW[2], "1.0 < |y| < 1.5", "l");
+        leg->AddEntry(hEW[3], "1.5 < |y| < 2.0", "l");
 
 
         DrawLegends({leg}, false);
 
-        can->SaveAs("plots/EW_ak4.pdf");
+        can->SaveAs("plots/"+tag+".pdf");
     }
 
 
@@ -182,8 +198,9 @@ struct corrPlotter {
 
         for(int y = 0; y < 5; ++y) {
             TH1D *ew, *np, *tot;
-            ew = ew16[y];
-            np = np16[y];
+            ew = hCorrs.at("ew16_ak4")[y];
+            np = hCorrs.at("np16_ak4")[y];
+
             can->cd(y+1);
             gPad->SetLogx();
 
@@ -242,7 +259,8 @@ void plotCorrs()
     corrPlotter plt;
 
     plt.init();
-    plt.plotEW();
+    plt.plotEW("ew16_ak4");
+    plt.plotEW("ew16_ak7");
 
     //plt.plotYearComp("EW");
     //plt.plotYearComp("NP");
