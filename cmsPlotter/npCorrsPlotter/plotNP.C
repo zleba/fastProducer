@@ -6,6 +6,8 @@ R__LOAD_LIBRARY($PlH_DIR/plottingHelper_C.so)
 //#include "tools.h"
 
 #include "plottingHelper.h"
+#include "RemoveOverlaps.h"
+
 using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
@@ -23,8 +25,31 @@ TObject *getSafe(TFile *f, TString str)
     return obj;
 }
 
+TGraphAsymmErrors *getEnvelope(vector<TH1D*> hs)
+{
+    TGraphAsymmErrors *gr = new TGraphAsymmErrors(hs[0]->GetNbinsX());
+    for(int i = 1; i <= hs[0]->GetNbinsX(); ++i) {
+
+        double Max = -1e10, Min = 1e10;
+        for(auto h : hs) {
+            Max = max(Max, h->GetBinContent(i) + h->GetBinError(i));
+            Min = min(Min, h->GetBinContent(i) - h->GetBinError(i));
+        }
+
+        double y    = (Max + Min)/2;
+        double yerr = (Max - Min)/2;
+        double x    = hs[0]->GetBinCenter(i);
+        double xerr = hs[0]->GetBinWidth(i)/2;
+        gr->SetPoint(i, x, y);
+        gr->SetPointError(i, xerr, xerr, yerr, yerr);
+
+    }
+    return gr;
+}
+
 struct plotter {
     vector<vector<TH1D*>> NPak4, NPak7;
+
 
     void loadData() {
         vector<TString> names = {"QCD_Pt-15to7000_TuneCP5_Flat_13TeV_pythia8",  "QCD_Pt-15to7000_TuneCP1_Flat_13TeV_pythia8", "QCD_Pt-15to7000_Tune4C_Flat_13TeV_pythia8",
@@ -71,8 +96,15 @@ struct plotter {
             gStyle->SetOptStat(0);
             hNP[0][y]->SetLineColor(kBlack);
             hNP[0][y]->SetLineWidth(2);
-            hNP[0][y]->Draw("hist e ][ ");
-            hNP[0][y]->Draw("hist  ][ same");
+            hNP[0][y]->Draw("axis");
+
+
+            TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y],hNP[2][y],hNP[3][y]} );
+            gr->SetFillStyle(1001);
+            gr->SetFillColor(kOrange);
+            gr->Draw("2 same");
+
+
             hNP[1][y]->Draw("hist e ][ same");
             hNP[1][y]->Draw("hist ][ same");
 
@@ -85,6 +117,10 @@ struct plotter {
             hNP[3][y]->Draw("hist e  ][ same");
             hNP[3][y]->Draw("hist   ][ same");
 
+            hNP[0][y]->Draw("hist e ][ same");
+            hNP[0][y]->Draw("hist  ][ same");
+
+
             GetYaxis()->SetRangeUser(0.85, 1.25);
             GetXaxis()->SetMoreLogLabels();
             GetXaxis()->SetNoExponent();
@@ -93,13 +129,14 @@ struct plotter {
             if(y == 3) GetXaxis()->SetTitle("Jet p_{T} (GeV)");
 
 
-            SetFTO({22}, {10}, {1.5, 2.6, 0.5, 3.7});
+            SetFTO({22}, {9}, {1.5, 2.6, 0.5, 3.7});
 
-            DrawLatexUp(-1, yBins[y]);
+            DrawLatexUp(-1.3, yBins[y]);
 
             if(y == 0) {
                 auto leg = newLegend(kPos9);
                 leg->AddEntry((TObject*)0, "", "h");
+                leg->AddEntry((TObject*)0, "#bf{CMS} #it{simulation}", "h");
                 leg->AddEntry((TObject*)0, "#sqrt{s} = 13 TeV", "h");
                 leg->AddEntry((TObject*)0, Form("anti-k_{T} (R=0.%d)",R), "h");
                 DrawLegends({leg}, true);
@@ -113,6 +150,10 @@ struct plotter {
                 leg->AddEntry(hNP[3][y], "Herwig7 CH3", "l");
                 DrawLegends({leg}, true);
             }
+
+            UpdateFrame();
+
+            RemoveOverlaps(gPad, GetXaxis(), true, true);
 
         }
 
