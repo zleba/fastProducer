@@ -146,7 +146,8 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOAlphas &fnlo)
 
 
 
-vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName)
+//R = 4 or R = 7
+vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName, int R)
 {
     //fnlo.SetLHAPDFMember(0);
 
@@ -172,39 +173,59 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName)
 
     cout << "Radek " << endl;
     vector<vector<TH1D*>> histos;
-    //for(double as = 0.111; as <= 0.1231; as += 0.001) {
     for(double as : pdfAsVals.at(pdfName)) {
         int asI = round(as * 1000);
 
-        TString tag;
-        if(pdfName == "CT14nlo")
-            tag = "CT14nlo_as_0";
-        else if(pdfName == "CT14nnlo")
-            tag = "CT14nnlo_as_0";
-        else if(pdfName == "HERAPDF20_NLO")
-            tag = "HERAPDF20_NLO_ALPHAS_";
-        else if(pdfName == "HERAPDF20_NNLO")
-            tag = "HERAPDF20_NNLO_ALPHAS_";
-        else if(pdfName == "NNPDF31_nnlo")
-            tag = "NNPDF31_nnlo_as_0";
-        else
+        TString tag1, tag2;
+        if(pdfName == "CT14nlo") {
+            tag1 = "CT14nlo_as_0";
+        } else if(pdfName == "CT14nnlo") {
+            tag1 = "CT14nnlo_as_0";
+
+        } else if(pdfName == "HERAPDF20_NLO") {
+            tag1 = "HERAPDF20_NLO_ALPHAS_";
+        } else if(pdfName == "HERAPDF20_NNLO") {
+            tag1 = "HERAPDF20_NNLO_ALPHAS_";
+
+        } else if(pdfName == "NNPDF31_nlo") {
+            tag1 = "NNPDF31_nlo_as_0";
+        } else if(pdfName == "NNPDF31_nnlo") {
+            tag1 = "NNPDF31_nnlo_as_0";
+
+        } else if(pdfName == "ABMP16_5_nlo") {
+            tag1 = "ABMP16als";
+            tag2 = "_5_nlo";
+        } else if(pdfName == "ABMP16_5_nnlo") {
+            tag1 = "ABMP16als";
+            tag2 = "_5_nnlo";
+        } else
             exit(1);
 
-        TString whole = tag + Form("%d", asI);
+        TString whole = tag1 + Form("%d", asI) + tag2;
         
         //cout << "Helenka " << pdfName << " " << as <<" "<< (asI == 118) << endl;
 
-        if(pdfName.Contains("CT14") && abs(as - 0.118) < 1e-6) {
-            whole = pdfName;
+        if(asI == 118) {
+            if(pdfName.Contains("CT14")) 
+                whole = pdfName;
+            else if(pdfName.Contains("HERAPDF20_"))
+                whole = pdfName + "_EIG";
+            else if(pdfName.Contains("NNPDF31_nlo"))
+                whole = "NNPDF31_nlo_as_0118_hessian";
+            else if(pdfName.Contains("NNPDF31_nnlo"))
+                whole = "NNPDF31_nnlo_as_0118_hessian";
         }
-        else if(pdfName.Contains("HERAPDF20_") && abs(as - 0.118) < 1e-6)
-            whole = pdfName + "_EIG";
-        else if(pdfName.Contains("NNPDF31") && abs(as - 0.118) < 1e-6)
-            whole = "NNPDF31_nnlo_as_0118_hessian";
+        if(pdfName.Contains("MMHT2014"))
+            whole = pdfName;
 
 
+        TString inFile;
+        if(R == 4)      inFile = "theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab";
+        else if(R == 7) inFile = "theorFiles/InclusiveNJets_fnl5332h_v23_fix.tab";
+        else assert(1);
 
-        fastNLOAlphas  fnlo("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", whole.Data(), 0);
+        fastNLOAlphas  fnlo(inFile, whole.Data(), 0);
+        //fastNLOAlphas  fnlo("theorFiles/suman/Fnlo_AK7_Eta1.tab", whole.Data(), 0);
         fnlo.SetAlphasMz(as, true);
 
         //cout << "Helenka " << as << endl;
@@ -213,14 +234,14 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName)
         for(auto  s : scales) {
             int nPDFs = fnlo.GetNPDFMembers();
             cout << sId << " "<< pdfName<<" : "<< whole <<" "<< nPDFs << endl;
-            if(abs(as - 0.118) > 1e-6)
+            if(asI != 118)
                 nPDFs = 1;
             for(int pdfId = 0; pdfId < nPDFs; ++pdfId) {
                 fnlo.SetLHAPDFMember(pdfId);
                 fnlo.SetScaleFactorsMuRMuF(s[0], s[1]);
                 auto hh = readHisto(fnlo);
 
-                for(int y = 0; y < 5; ++y)
+                for(int y = 0; y < hh.size(); ++y)
                     hh[y]->SetTitle(pdfName + Form("_y%d_as0%d_scale%d_pdf%d", y, asI, sId, pdfId));
 
                 //cout << "RAdek before " << hh.size() << endl;
@@ -349,6 +370,69 @@ void SaveHistosByTitle(vector<vector<TH1D*>> hist)
 
 
 
+void scanAs()
+{
+    //vector<TString> pdfList = {"CT14nlo", "CT14nnlo", "HERAPDF20_NLO", "HERAPDF20_NNLO",   "NNPDF31_nlo", "NNPDF31_nnlo", "ABMP16_5_nlo", "ABMP16_5_nnlo"};
+    vector<TString> pdfList = { "ABMP16_5_nlo", "ABMP16_5_nnlo"};
+
+
+    TFile *fOut = new TFile("cmsJetsAsScanAK7n.root", "RECREATE");
+
+    for(auto pdf : pdfList) {
+        vector<vector<TH1D*>> histPDF    = getAsScaleuncHistos(pdf, 4);
+        SaveHistosByTitle(histPDF);
+    }
+
+    /*
+    vector<vector<TH1D*>> histAsCTnlo    = getAsScaleuncHistos("CT14nlo");
+    //vector<vector<TH1D*>> histAsCTnnlo   = getAsScaleuncHistos("CT14nnlo");
+    vector<vector<TH1D*>> histAsHERAnlo  = getAsScaleuncHistos("HERAPDF20_NLO");
+    //vector<vector<TH1D*>> histAsHERAnnlo = getAsScaleuncHistos("HERAPDF20_NNLO");
+
+    //vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
+    vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
+
+
+    //SaveHistosByTitle(histAsCTnlo);
+    SaveHistosByTitle(histAsCTnlo);
+    //SaveHistosByTitle(histAsHERAnlo);
+    SaveHistosByTitle(histAsHERAnlo);
+    SaveHistosByTitle(histAsNNPDF);
+    */
+    fOut->Write();
+    fOut->Close();
+}
+
+void calcXsections(TString fastName, TString tag, TString pdfName)
+{
+
+    using namespace std;
+    using namespace say;		// namespace for 'speaker.h'-verbosity levels
+    using namespace fastNLO;	// namespace for fastNLO constants
+
+
+    fastNLOAlphas fnlo(fastName.Data(), pdfName.Data(), 0);
+
+    fnlo.SetContributionON(fastNLO::kFixedOrder,0,true);
+    fnlo.SetContributionON(fastNLO::kFixedOrder,1,true);
+    fnlo.SetUnits(fastNLO::kPublicationUnits);
+
+    vector<vector<TH1D*>> histScl = getScaleuncHistos(fnlo);
+    vector<vector<TH1D*>> histPDF = getPDFuncHistos(fnlo);
+
+
+    SaveHistos(histPDF, "hist"+ tag + "CT14PDF");
+    SaveHistos(histScl, "hist"+ tag + "CT14Scl");
+
+    //fOut->Write();
+    //fOut->Close();
+
+}
+
+
+
+
+
 
 //__________________________________________________________________________________________________________________________________
 
@@ -362,11 +446,25 @@ int main(int argc, char** argv){
 
 	SetGlobalVerbosity(ERROR);
 
+    TFile *fOut = new TFile("theorFiles/cmsJetsNLO_AK7.root", "RECREATE");
+
+    scanAs();
+    return 0;
+
+
+    //calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "Old", "CT14nlo");
+    calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec000.tab", "Old", "CT14nlo");
+    //calcXsections("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "New", "CT14nlo");
+    calcXsections("theorFiles/suman/Fnlo_AK7_Eta1.tab", "New", "CT14nlo");
+    fOut->Write();
+    fOut->Close();
+
+    return 0;
 
     //vector<TH1D*> readHisto(fastNLOAlphas &fnlo, TString tabName, TString pdfName)
 
     //say::SetGlobalVerbosity(say::DEBUG);
-    /*
+
     fastNLOAlphas fnloOld("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT14nlo", 0);
     fastNLOAlphas fnloNew("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "CT14nlo", 0);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,0,true);
@@ -376,7 +474,7 @@ int main(int argc, char** argv){
     fnloNew.SetContributionON(fastNLO::kFixedOrder,0,true);
     fnloNew.SetContributionON(fastNLO::kFixedOrder,1,true);
     fnloNew.SetUnits(fastNLO::kPublicationUnits);
-    */
+
 
 
     //vector<vector<TH1D*>> histNewScl = getScaleuncHistos(fnloNew);
@@ -384,25 +482,6 @@ int main(int argc, char** argv){
     //vector<vector<TH1D*>> histOldScl = getScaleuncHistos(fnloOld);
     //vector<vector<TH1D*>> histOldPDF = getPDFuncHistos(fnloOld);
 
-    vector<vector<TH1D*>> histAsCTnlo    = getAsScaleuncHistos("CT14nlo");
-    //vector<vector<TH1D*>> histAsCTnnlo   = getAsScaleuncHistos("CT14nnlo");
-    vector<vector<TH1D*>> histAsHERAnlo  = getAsScaleuncHistos("HERAPDF20_NLO");
-    //vector<vector<TH1D*>> histAsHERAnnlo = getAsScaleuncHistos("HERAPDF20_NNLO");
-
-    //vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
-    vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
-
-
-    TFile *fOut = new TFile("cmsJetsAsScan.root", "RECREATE");
-    //SaveHistosByTitle(histAsCTnlo);
-    SaveHistosByTitle(histAsCTnlo);
-    //SaveHistosByTitle(histAsHERAnlo);
-    SaveHistosByTitle(histAsHERAnlo);
-    SaveHistosByTitle(histAsNNPDF);
-    fOut->Write();
-    fOut->Close();
-    exit(0);
-    return 0;
 
     //SaveHistos(histNewPDF, "histNewCT14PDF");
     //SaveHistos(histNewScl, "histNewCT14Scl");

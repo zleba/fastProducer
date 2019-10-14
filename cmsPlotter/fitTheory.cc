@@ -114,14 +114,17 @@ struct point {
 
 
 struct asFitter {
-    vector<point> data;
+    vector<point> data; //allDataPoints + potential theory predictions
     //vector<double> th;
-    function<bool(point)> Cut;
+    function<bool(point)> Cut; //selection function
 
-    map<TString, map<int, vector< vector<vector<TH1D*>> >>>  thHists;
+    //Map with theorXsections [pdfName][alphaS*1000] [scaleVar][iPdf][rap]
+    map<TString, map<int, vector< vector<vector<TH1D*>> >>>  thHists; 
 
-    void readData(TString fName)
+    //Read data from the text file
+    static vector<point>  readData(TString fName)
     {
+        vector<point> dataNow;
 
         ifstream infile(fName);
         string line;
@@ -159,18 +162,22 @@ struct asFitter {
             }
 
             if(p.sigma > 0)
-                data.push_back(p);
+                dataNow.push_back(p);
             //cout << endl << endl;;
             // process pair (a,b)
         }
+        return dataNow;
 
     }
 
 
-    vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s)
+    //Read theory histogram pdfName, as and scale variation s (the NP/EW corrections are applied)
+    static vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s)
     {
 
-        vector<vector<TH1D*>> vTh;
+        //Size of the histogram depends on the as value and #pdf for given pdf set
+        
+        vector<vector<TH1D*>> vTh; //indexes - [pdfVar][y]
         vTh.resize(1);
         if(pdfName.Contains("CT14")  && abs(as - 0.118) < 1e-6)
             vTh.resize(56+1);
@@ -198,6 +205,7 @@ struct asFitter {
         return vTh;
     }
 
+    //Read theory histograms for PDF pdfName (all alphaS (as) and all scale choices (s))
     void readAllTheory(TString pdfName) {
         for(auto as: pdfAsVals.at(pdfName)) {
             cout << pdfName <<" "<< as << endl;
@@ -209,6 +217,7 @@ struct asFitter {
     }
 
 
+    //Fill theory to the points in vector<points>, resutl contains also PDF unc.
     void fillTheory(TString pdfName, double as, int scale = 0)
     {
         //vector<vector<TH1D*>> thHist    = readHistos(pdfName, as);
@@ -241,6 +250,7 @@ struct asFitter {
     }
 
 
+    //Get number of points fulfilling the cuts
     int getNpoints()
     {
         int s = 0;
@@ -269,6 +279,7 @@ struct asFitter {
     //bool Cut(const point &p) { if(p.sigma == 0) return false;  return true;}
 
 
+    //Get the vector with the nuissence parameters (values which minimize chi2)
     TVectorD getShifts()
     {
         int nErr = data[0].errs.size();
@@ -300,6 +311,7 @@ struct asFitter {
         return sh;
     }
 
+    //get the chi2 vale, the nuisence vector is as an input
     double getChi2(const TVectorD &s)
     {
         //Evaluate the chi2
@@ -322,6 +334,7 @@ struct asFitter {
         return chi2;
     }
 
+    //Get chi2 based on covariance matrix
     double getChi2cov()
     {
         //Filter data
@@ -344,6 +357,8 @@ struct asFitter {
         for(int k = 0; k < dataF[0].errs.size(); ++k) {
             for(int i = 0; i < dataF.size(); ++i) 
             for(int j = 0; j < dataF.size(); ++j) {
+                //if(dataF[i].yMin != dataF[j].yMin)// && k <= 15)
+                 //   continue;
                 CovSys(i,j) += dataF[i].errs[k]*dataF[j].errs[k]  *  dataF[i].sigma * dataF[j].sigma;
             }
         }
@@ -366,7 +381,7 @@ struct asFitter {
             }
         }
 
-        TMatrixD Cov = CovStat + CovPDF;// + CovSys + CovPDF;
+        TMatrixD Cov = CovStat + CovSys +  CovPDF;// + CovSys + CovPDF;
 
         double chi2 = 0;
         
@@ -450,6 +465,7 @@ struct asFitter {
     }
     */
 
+    //fill the theory from file to histos and get chi2 wrt data
     double calcChi2(TString pdfName, double as, int scale = 0) {
 
         fillTheory(pdfName, as, scale);
@@ -457,9 +473,11 @@ struct asFitter {
         return getChi2cov();
     }
 
+
+    //print the chi2 table
     void printChi2Table()
     {
-        vector<TString> pdfSets = {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo"};
+        vector<TString> pdfSets = {"CT14nlo", "HERAPDF20_NLO", "NNPDF31_nnlo"};
 
         for(auto p : pdfSets)
             cout << p << " ";
@@ -477,6 +495,26 @@ struct asFitter {
             cout << endl;
 
         }
+
+        
+        { //Total chi2 
+            cout << "Total ";
+            Cut = [](point p) { return ( abs(p.yMin) < 1.6 &&  p.sigma != 0);};
+            int ndf = getNpoints();
+
+            for(auto pdfSet : pdfSets) {
+                double chi2now = calcChi2(pdfSet, 0.118);
+                cout  <<chi2now << " / " << ndf << " " ;
+            }
+            cout << endl;
+
+        }
+
+
+
+
+
+
         //double chi2now = asfit.calcChi2("CT14nnlo", 0.118);
         //cout << as <<" : "<<chi2now << " / " << ndf << endl;
     }
@@ -514,7 +552,7 @@ struct asFitter {
     {
         double ptMin = ptBinsAs[pt];
         double ptMax = ptBinsAs[pt+1];
-        Cut = [ptMin,ptMax](point p) { return (  abs(p.yMin) < 1.6 &&  p.sigma != 0   && p.ptMin >= ptMin -1 &&  p.ptMax <= ptMax +1     );};
+        Cut = [ptMin,ptMax](point p) { return (  abs(p.yMin) < 0.3 &&  p.sigma != 0   && p.ptMin >= ptMin -1 &&  p.ptMax <= ptMax +1     );};
 
         int ndf = getNpoints();
 
@@ -623,13 +661,15 @@ int main(int argc, char** argv)
     fTh  = TFile::Open("cmsJetsAsScan.root");  //NLO predictions
 
 	asFitter asfit;
-    asfit.readData("xFitterTables/data16.txt");
+    asfit.data = asfit.readData("xFitterTables/data16.txt");
     asfit.readAllTheory("CT14nlo");
-    //asfit.readAllTheory("HERAPDF20_NLO");
-    //asfit.readAllTheory("NNPDF31_nnlo");
+    asfit.readAllTheory("HERAPDF20_NLO");
+    asfit.readAllTheory("NNPDF31_nnlo");
 
 
+    asfit.printChi2Table();
 
+    return 0;
     asfit.getAllChi2s();
     return 0;
 
@@ -668,7 +708,6 @@ int main(int argc, char** argv)
     asfit.printAsY(2);
     asfit.printAsY(3);
 
-    //asfit.printChi2Table();
     return 0;
 
 
