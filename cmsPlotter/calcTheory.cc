@@ -38,6 +38,23 @@ TString rn() {return Form("%d",rand());}
 
 using namespace std;
 
+//All functions to have a list
+vector<TH1D*> readHisto(fastNLOAlphas &fnlo);
+vector<vector<TH1D*>> getScaleuncHistos(fastNLOAlphas &fnlo);
+vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName, int R);
+vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo);
+//vector<vector<TH1D*>> getAsHistos(fastNLOAlphas &fnlo);
+TH1D *rebin(TH1D *h, TH1D *hTemp);
+void printHisto(TH1D *h);
+void SaveHistos(vector<vector<TH1D*>> hist,  TString tag);
+void SaveHistosByTitle(vector<vector<TH1D*>> hist);
+void scanAsToFile(int R);
+vector<vector<vector<TH1D*>>> calcXsections(int R, TString pdfName);
+
+TString getLHAname(TString pdfName, int asI);
+
+
+
 //Read 2D histogram to the vector, index is rapidity, theory is given by fnlo
 //Histograms have no error
 vector<TH1D*> readHisto(fastNLOAlphas &fnlo)
@@ -149,6 +166,56 @@ vector<vector<TH1D*>> getScaleuncHistos(fastNLOAlphas &fnlo)
 }
 
 
+TString getLHAname(TString pdfName, int asI)
+{
+    TString tag1, tag2;
+    if(pdfName == "CT14nlo") {
+        tag1 = "CT14nlo_as_0";
+    } else if(pdfName == "CT14nnlo") {
+        tag1 = "CT14nnlo_as_0";
+
+    } else if(pdfName == "HERAPDF20_NLO") {
+        tag1 = "HERAPDF20_NLO_ALPHAS_";
+    } else if(pdfName == "HERAPDF20_NNLO") {
+        tag1 = "HERAPDF20_NNLO_ALPHAS_";
+
+    } else if(pdfName == "NNPDF31_nlo") {
+        tag1 = "NNPDF31_nlo_as_0";
+    } else if(pdfName == "NNPDF31_nnlo") {
+        tag1 = "NNPDF31_nnlo_as_0";
+
+    } else if(pdfName == "ABMP16_5_nlo") {
+        tag1 = "ABMP16als";
+        tag2 = "_5_nlo";
+    } else if(pdfName == "ABMP16_5_nnlo") {
+        tag1 = "ABMP16als";
+        tag2 = "_5_nnlo";
+    } else if(pdfName == "MMHT2014nlo68cl" || "MMHT2014nnlo68cl") {
+        return pdfName;
+    }
+    else
+        exit(1);
+
+    TString whole = tag1 + Form("%d", asI) + tag2;
+
+    if(asI == 118) {
+        if(pdfName.Contains("CT14")) 
+            whole = pdfName;
+        else if(pdfName.Contains("HERAPDF20_"))
+            whole = pdfName + "_EIG";
+        else if(pdfName.Contains("NNPDF31_nlo"))
+            whole = "NNPDF31_nlo_as_0118_hessian";
+        else if(pdfName.Contains("NNPDF31_nnlo"))
+            whole = "NNPDF31_nnlo_as_0118_hessian";
+    }
+    if(pdfName.Contains("MMHT2014"))
+        whole = pdfName;
+
+    return whole;
+}
+
+
+
 
 //R = 4 or R = 7
 vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName, int R)
@@ -180,48 +247,7 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName, int R)
     for(double as : pdfAsVals.at(pdfName)) {
         int asI = round(as * 1000);
 
-        TString tag1, tag2;
-        if(pdfName == "CT14nlo") {
-            tag1 = "CT14nlo_as_0";
-        } else if(pdfName == "CT14nnlo") {
-            tag1 = "CT14nnlo_as_0";
-
-        } else if(pdfName == "HERAPDF20_NLO") {
-            tag1 = "HERAPDF20_NLO_ALPHAS_";
-        } else if(pdfName == "HERAPDF20_NNLO") {
-            tag1 = "HERAPDF20_NNLO_ALPHAS_";
-
-        } else if(pdfName == "NNPDF31_nlo") {
-            tag1 = "NNPDF31_nlo_as_0";
-        } else if(pdfName == "NNPDF31_nnlo") {
-            tag1 = "NNPDF31_nnlo_as_0";
-
-        } else if(pdfName == "ABMP16_5_nlo") {
-            tag1 = "ABMP16als";
-            tag2 = "_5_nlo";
-        } else if(pdfName == "ABMP16_5_nnlo") {
-            tag1 = "ABMP16als";
-            tag2 = "_5_nnlo";
-        } else
-            exit(1);
-
-        TString whole = tag1 + Form("%d", asI) + tag2;
-        
-        //cout << "Helenka " << pdfName << " " << as <<" "<< (asI == 118) << endl;
-
-        if(asI == 118) {
-            if(pdfName.Contains("CT14")) 
-                whole = pdfName;
-            else if(pdfName.Contains("HERAPDF20_"))
-                whole = pdfName + "_EIG";
-            else if(pdfName.Contains("NNPDF31_nlo"))
-                whole = "NNPDF31_nlo_as_0118_hessian";
-            else if(pdfName.Contains("NNPDF31_nnlo"))
-                whole = "NNPDF31_nnlo_as_0118_hessian";
-        }
-        if(pdfName.Contains("MMHT2014"))
-            whole = pdfName;
-
+        TString whole = getLHAname(pdfName, asI);
 
         TString inFile;
         if(R == 4)      inFile = "theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab";
@@ -271,6 +297,9 @@ vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
     fnlo.SetScaleFactorsMuRMuF(1, 1);
 
     int nPDFs = fnlo.GetNPDFMembers();
+    TString pdfName = fnlo.GetLHAPDFFilename();
+    cout << pdfName << endl;
+    double Fact = pdfName.Contains("CT14") ? 1.65 : 1;
 
     vector<vector<TH1D*>> histos;
     for(int i = 0; i < nPDFs; ++i) {
@@ -292,7 +321,7 @@ vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
             double cnt = histos[0][y]->GetBinContent(i);
             double up = 0, dn = 0;
             for(int s = 1; s < nPDFs; ++s) { //loop over scales
-                double err  = histos[s][y]->GetBinContent(i) - cnt;
+                double err  = (histos[s][y]->GetBinContent(i) - cnt)/Fact;
                 up = hypot(up, max(0.0, err));
                 dn = hypot(dn, max(0.0,-err));
             }
@@ -304,47 +333,66 @@ vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
     return {hCnt, hUp, hDn};
 }
 
-
-//Get histogram including up and dn pdf variation 
-vector<vector<TH1D*>> getAsHistos(fastNLOAlphas &fnlo)
+//Get histo using interpolation
+vector<TH1D*> getAsHisto(map<double, fastNLOAlphas*> &fnloMap, double as)
 {
-    fnlo.SetLHAPDFMember(0);
-    fnlo.SetScaleFactorsMuRMuF(1, 1);
-
-    fnlo.SetAlphasMz(as, true);
-
-    int nPDFs = fnlo.GetNPDFMembers();
-
-    vector<vector<TH1D*>> histos;
-    for(int i = 0; i < nPDFs; ++i) {
-        fnlo.SetLHAPDFMember(i);
-        histos.push_back(readHisto(fnlo));
-    }
-
-    vector<TH1D*> hCnt(histos[0].size());
-    vector<TH1D*> hUp(histos[0].size());
-    vector<TH1D*> hDn(histos[0].size());
-
-    for(int y = 0; y < histos[0].size(); ++y) { //loop over y-bins
-
-        hCnt[y] = (TH1D*) histos[0][y]->Clone(rn());
-        hUp[y] = (TH1D*) histos[0][y]->Clone(rn());
-        hDn[y] = (TH1D*) histos[0][y]->Clone(rn());
-
-        for(int i = 1; i <= histos[0][y]->GetNbinsX(); ++i) { //loop over pt-bins
-            double cnt = histos[0][y]->GetBinContent(i);
-            double up = 0, dn = 0;
-            for(int s = 1; s < nPDFs; ++s) { //loop over scales
-                double err  = histos[s][y]->GetBinContent(i) - cnt;
-                up = hypot(up, max(0.0, err));
-                dn = hypot(dn, max(0.0,-err));
-            }
-            hCnt[y]->SetBinContent(i, cnt);
-            hUp[y]->SetBinContent(i, cnt + up);
-            hDn[y]->SetBinContent(i, cnt - dn);
+    fastNLOAlphas *fastL, *fastH;
+    double asL, asH;
+    for(auto fast : fnloMap) {
+        if(fast.first <= as) {
+            asL   = fast.first;
+            fastL = fast.second;
+        }
+        if(fast.first >= as) {
+            asH = fast.first;
+            fastH = fast.second;
+            break;
         }
     }
-    return {hCnt, hUp, hDn};
+    auto hL = readHisto(*fastL);
+    auto hH = readHisto(*fastH);
+
+    vector<TH1D*> hAvg(hL.size());
+    for(int y = 0; y < hL.size(); ++y) {
+       hAvg[y] = (TH1D*) hL[y]->Clone(rn());
+       hAvg[y]->Add(hL[y], hH[y],  (asH - as)/(asH-asL), (as - asL)/(asH-asL));
+    }
+    return hAvg;
+}
+
+//Get histogram including up and dn aS variation 
+//input: fastNLO map ideally for 0.116, 0.117, 0.118, 0.119, 0.200
+vector<vector<TH1D*>> getAsHistos(map<double, fastNLOAlphas*> &fnloMap)
+{
+    for(auto fast : fnloMap) {
+        fast.second->SetLHAPDFMember(0);
+        fast.second->SetScaleFactorsMuRMuF(1, 1);
+        fast.second->SetAlphasMz(fast.first, true);
+    }
+
+    const double asErr = 0.0015;
+    auto hU =  getAsHisto(fnloMap, 0.1180+asErr);
+    auto hD =  getAsHisto(fnloMap, 0.1180-asErr);
+    auto hC =  readHisto(*fnloMap.at(0.118));
+
+    vector<TH1D*> hUp(hU.size());
+    vector<TH1D*> hDn(hD.size());
+
+    for(int y = 0; y < hC.size(); ++y) { //loop over y-bins
+
+        hUp[y] = (TH1D*) hU[y]->Clone(rn());
+        hDn[y] = (TH1D*) hD[y]->Clone(rn());
+
+        for(int i = 1; i <= hC[y]->GetNbinsX(); ++i) { //loop over pt-bins
+            double cnt = hC[y]->GetBinContent(i);
+            double up = 0, dn = 0;
+            up = max(cnt, max(hU[y]->GetBinContent(i),hD[y]->GetBinContent(i)));
+            dn = min(cnt, min(hU[y]->GetBinContent(i),hD[y]->GetBinContent(i)));
+            hUp[y]->SetBinContent(i, up);
+            hDn[y]->SetBinContent(i, dn);
+        }
+    }
+    return {hC, hUp, hDn};
 }
 
 
@@ -426,7 +474,7 @@ void scanAsToFile(int R)
     TFile *fOut = new TFile(Form("cmsJetsAsScan_ak%d.root",R), "RECREATE");
 
     for(auto pdf : pdfList) {
-        vector<vector<TH1D*>> histPDF    = getAsScaleuncHistos(pdf, 4);
+        vector<vector<TH1D*>> histPDF    = getAsScaleuncHistos(pdf, R);
         SaveHistosByTitle(histPDF);
     }
 
@@ -434,7 +482,15 @@ void scanAsToFile(int R)
     fOut->Close();
 }
 
-void calcXsections(TString fastName, TString tag, TString pdfName)
+
+void setNLO(fastNLOAlphas &fnlo)
+{
+    fnlo.SetContributionON(fastNLO::kFixedOrder,0,true);
+    fnlo.SetContributionON(fastNLO::kFixedOrder,1,true);
+    fnlo.SetUnits(fastNLO::kPublicationUnits);
+}
+
+vector<vector<vector<TH1D*>>> calcXsections(int R, TString pdfName)
 {
 
     using namespace std;
@@ -442,27 +498,74 @@ void calcXsections(TString fastName, TString tag, TString pdfName)
     using namespace fastNLO;	// namespace for fastNLO constants
 
 
-    fastNLOAlphas fnlo(fastName.Data(), pdfName.Data(), 0);
+    TString fastName;
+    if(R == 4)      fastName = "theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab";
+    else if(R == 7) fastName = "theorFiles/InclusiveNJets_fnl5332h_v23_fix.tab";
+    else assert(1);
 
-    fnlo.SetContributionON(fastNLO::kFixedOrder,0,true);
-    fnlo.SetContributionON(fastNLO::kFixedOrder,1,true);
-    fnlo.SetUnits(fastNLO::kPublicationUnits);
+    cout << "Helenka " << __LINE__ << endl;
+    fastNLOAlphas fnlo(fastName.Data(), getLHAname(pdfName, 118).Data(), 0);
+    cout << "Helenka " << __LINE__ << endl;
+    setNLO(fnlo);
+    cout << "Helenka " << __LINE__ << endl;
 
     vector<vector<TH1D*>> histScl = getScaleuncHistos(fnlo);
+    cout << "Helenka " << __LINE__ << endl;
     vector<vector<TH1D*>> histPDF = getPDFuncHistos(fnlo);
+    cout << "Helenka " << __LINE__ << endl;
 
+    vector<vector<TH1D*>> histAs;
+    if(!pdfName.Contains("MMHT2014")) {
 
-    SaveHistos(histPDF, "hist"+ tag + "CT14PDF");
-    SaveHistos(histScl, "hist"+ tag + "CT14Scl");
+        map<double,fastNLOAlphas*> fnloMap;
+        //get alphaS unc vector
+        vector<TString> names;
+
+        for(auto as : pdfAsVals.at(pdfName)) {
+        //for(int asI = 116; asI <= 120; ++asI) {
+            int asI = round(as * 1000);
+            if(asI < 116 || asI > 120) continue;
+            TString pdfNameAs = getLHAname(pdfName, asI);
+            cout << fastName.Data() <<" "<< pdfNameAs.Data() << endl;
+            fnloMap.insert( make_pair(asI/1000., new fastNLOAlphas(fastName.Data(), pdfNameAs.Data(), 0)) );
+            setNLO(*fnloMap.at(asI/1000.));
+        }
+        histAs = getAsHistos(fnloMap);
+    }
+    else { //dummy
+        histAs = {histScl[0], histScl[0], histScl[0]}; 
+    }
+
+    return {histPDF, histScl, histAs};
 
     //fOut->Write();
     //fOut->Close();
 
 }
 
+void calcXsectionsAll(int R, vector<TString> pdfNames)
+{
+    vector<vector<vector<TH1D*>>>  histsPDF, histsScl, histsAs;
 
+    for(auto pdf : pdfNames) {
+        auto xsecs =  calcXsections(R, pdf);
+        histsPDF.push_back(xsecs[0]);
+        histsScl.push_back(xsecs[1]);
+        histsAs. push_back(xsecs[2]);
+    }
 
+    TFile *fOut = new TFile(Form("theorFiles/cmsJetsNLO_AK%d.root", R), "RECREATE");
+    for(int i = 0; i < histsPDF.size(); ++i) {
+        SaveHistos(histsPDF[i], "hist"+  pdfNames[i] + "_PDF");
+        SaveHistos(histsScl[i], "hist"+  pdfNames[i] + "_Scl");
+        SaveHistos(histsAs[i],  "hist"+  pdfNames[i] + "_As");
+        cout << "Saving " << pdfNames[i] << endl;
+    }
+    fOut->Write();
+    fOut->Close();
+    cout << "End " << endl;
 
+}
 
 
 //__________________________________________________________________________________________________________________________________
@@ -482,14 +585,16 @@ int main(int argc, char** argv){
     scanAsToFile(7);
     return 0;
 
-    TFile *fOut = new TFile("theorFiles/cmsJetsNLO_AK7.root", "RECREATE");
 
-    //calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "Old", "CT14nlo");
-    calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec000.tab", "Old", "CT14nlo");
-    //calcXsections("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "New", "CT14nlo");
-    calcXsections("theorFiles/suman/Fnlo_AK7_Eta1.tab", "New", "CT14nlo");
-    fOut->Write();
-    fOut->Close();
+    //calcXsectionsAll(4, {"CT14nlo",  "CT14nnlo", "HERAPDF20_NLO",  "HERAPDF20_NNLO", "NNPDF31_nlo", "NNPDF31_nnlo", "ABMP16_5_nlo", "ABMP16_5_nnlo", "MMHT2014nlo68cl", "MMHT2014nnlo68cl"});
+
+    //TFile *fOut = new TFile("theorFiles/cmsJetsNLO_AK4.root", "RECREATE");
+    ////calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "Old", "CT14nlo");
+    //calcXsections(4, "CT14nlo");
+    ////calcXsections("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "New", "CT14nlo");
+    ////calcXsections(7, "CT14nlo");
+    //fOut->Write();
+    //fOut->Close();
 
     return 0;
 
@@ -522,8 +627,8 @@ int main(int argc, char** argv){
 
     //histNewScl[0][0]->Print("all");
     //histNewScl[0][0]->Write();
-    fOut->Write();
-    fOut->Close();
+    //fOut->Write();
+    //fOut->Close();
 
     /*
     return 0;

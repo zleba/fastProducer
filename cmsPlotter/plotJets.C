@@ -4,6 +4,7 @@ R__LOAD_LIBRARY($PlH_DIR/plottingHelper_C.so)
 #include "tools.h"
 
 #include "plottingHelper.h"
+#include "RemoveOverlaps.h"
 using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
@@ -12,6 +13,17 @@ TString year = "16";
 
 
 vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
+
+void myAssertFun(bool cond,  int line)
+{
+    if(!cond) {
+        cout << "Issue at line " << line << endl;
+        exit(1);
+    }
+}
+
+#define myAssert(cond) myAssertFun(cond,   __LINE__)
+
 
 
 TH1D *rebin(TH1D *h, TH1D *hTemp) //second is template
@@ -50,39 +62,83 @@ void removeEmpty(TH1D *h, TH1D *hTemp)
 }
 
 
-/*
-void plotTheorUnc(TString Year)
+TGraphAsymmErrors *getBandTot(TH1D *hNom, vector<TH1D*> hSh)
+{
+    TGraphAsymmErrors *gr = new TGraphAsymmErrors(hNom->GetNbinsX());
+    for(int i = 1; i <= hNom->GetNbinsX(); ++i) {
+        double cnt = hNom->GetBinContent(i);
+
+        double dn = 0;
+        double up = 0;
+        for(auto h : hSh) {
+            double v = h->GetBinContent(i);
+            up =  hypot(up, max(0.,v - cnt));
+            dn =  hypot(dn, max(0.,cnt - v));
+        }
+        gr->SetPoint(i-1, hNom->GetBinCenter(i), cnt);
+        gr->SetPointError(i-1, hNom->GetBinWidth(i)/2, hNom->GetBinWidth(i)/2, dn, up);
+    }
+    return gr;
+}
+
+
+void plotTheorUnc(TString Tag, TString pdf)
 {
     TFile *fTh;
     
-    if(Year == "16ak7")
+    if(Tag == "16ak7")
         fTh = TFile::Open("theorFiles/cmsJetsNLO_AK7.root");  //NLO predictions
-    else
-        fTh = TFile::Open("theorFiles/cmsJetsNLO.root");  //NLO predictions
+    else if(Tag == "16ak4")
+        fTh = TFile::Open("theorFiles/cmsJetsNLO_AK4.root");  //NLO predictions
+    else {
+        cout << "Bad file" << endl;
+        exit(1);
+    }
 
-    int yMax = (Year != "16ak7") ? 5 : 4;
+    TFile *fD  = TFile::Open(Form("xFitterTables/data%s.root", Tag.Data()));
 
+    //int yMax = (Tag != "16ak7") ? 5 : 4;
+    int yMax =  4;
 
-    TCanvas *can = new TCanvas(rn(), "", 550, 400);
+    //vector<TH1D*> hStat(yMax);
+
+    TCanvas *can = new TCanvas(rn(), "", 650, 300);
     SetTopBottom(0.1, 0.15);
     DividePad({1,1,1,1}, {1});
     gStyle->SetOptStat(0);
 
 
     for(int y = 0; y < yMax; ++y) {
-        TString tag = (Year == "15") ? "histOld" : "histNew";
+        //TString tag = (Year == "15") ? "histOld" : "histNew";
 
-        TH1D *hTh = (TH1D*) fTh->Get(tag+Form("CT14Scl_Cnt_y%d",y));
-        TH1D *hThScU = (TH1D*) fTh->Get(tag+Form("CT14Scl_Up_y%d",y));
-        TH1D *hThScD = (TH1D*) fTh->Get(tag+Form("CT14Scl_Dn_y%d",y));
-        TH1D *hThPdfU = (TH1D*) fTh->Get(tag+Form("CT14PDF_Up_y%d",y));
-        TH1D *hThPdfD = (TH1D*) fTh->Get(tag+Form("CT14PDF_Dn_y%d",y));
+        //can->cd(y+1);
+
+        TH1D *hStat = (TH1D*) fD->Get(Form("hStat_y%d",y));
+        myAssert(hStat);
+
+        TH1D *hTh = (TH1D*) fTh->Get("hist"+pdf+Form("_Scl_Cnt_y%d",y));
+        myAssert(hTh);
+        TH1D *hThScU  = (TH1D*) fTh->Get("hist"+pdf+Form("_Scl_Up_y%d",y));
+        TH1D *hThScD  = (TH1D*) fTh->Get("hist"+pdf+Form("_Scl_Dn_y%d",y));
+        TH1D *hThPdfU = (TH1D*) fTh->Get("hist"+pdf+Form("_PDF_Up_y%d",y));
+        TH1D *hThPdfD = (TH1D*) fTh->Get("hist"+pdf+Form("_PDF_Dn_y%d",y));
+        TH1D *hThAsU    = (TH1D*) fTh->Get("hist"+pdf+Form("_As_Up_y%d",y));
+        myAssert(hThAsU);
+        TH1D *hThAsD    = (TH1D*) fTh->Get("hist"+pdf+Form("_As_Dn_y%d",y));
+        myAssert(hThAsD);
 
         hTh = rebin(hTh, hStat);
         hThScU = rebin(hThScU, hStat);
         hThScD = rebin(hThScD, hStat);
         hThPdfU = rebin(hThPdfU, hStat);
         hThPdfD = rebin(hThPdfD, hStat);
+        hThAsU = rebin(hThAsU, hStat);
+        hThAsD = rebin(hThAsD, hStat);
+
+        //hAsU->Print("all");
+        //hAsD->Print("all");
+        //exit(0);
+
 
 
         //hStat->Divide(hTh); //normalize to theory
@@ -90,6 +146,11 @@ void plotTheorUnc(TString Year)
         hThScD->Divide(hTh); //normalize to theory
         hThPdfU->Divide(hTh); //normalize to theory
         hThPdfD->Divide(hTh); //normalize to theory
+        hThAsU->Divide(hTh); //normalize to theory
+        hThAsD->Divide(hTh); //normalize to theory
+
+        hTh->Divide(hTh);
+
 
         //hThNLL->Divide(hTh);
         //hThNNLO->Divide(hTh);
@@ -97,16 +158,21 @@ void plotTheorUnc(TString Year)
 
         can->cd(y+1);
 
-        can->SetLogx();
-        can->SetTicky(1);
+        gPad->SetLogx();
+        gPad->SetTicky(1);
 
         hStat->Draw("axis");
 
-        gSys->SetFillColor(kOrange);
-        gSys->SetLineColor(kBlack);
-        gSys->SetLineStyle(9);
-        gSys->SetLineWidth(2);
-        gSys->Draw("le2 same");
+        TGraphAsymmErrors *grTot = getBandTot(hTh, {hThScU, hThScD, hThPdfU, hThPdfD, hThAsU, hThAsD});
+        grTot->SetFillColor(kOrange);
+        grTot->Draw("e2 same");
+
+
+        //gSys->SetFillColor(kOrange);
+        //gSys->SetLineColor(kBlack);
+        //gSys->SetLineStyle(9);
+        //gSys->SetLineWidth(2);
+        //gSys->Draw("le2 same");
 
 
         hThScU->SetLineColor(kRed);
@@ -116,37 +182,35 @@ void plotTheorUnc(TString Year)
         hThPdfU->SetLineStyle(2);
         hThPdfD->SetLineStyle(2);
 
-        hThNLL->SetLineWidth(2);
-        hThNNLO->SetLineWidth(2);
-        hThNLL->SetLineColor(kBlue);
-        hThNNLO->SetLineColor(kMagenta);
+        hThAsU->SetLineColor(kBlue);
+        hThAsD->SetLineColor(kBlue);
+        hThAsU->SetLineStyle(1);
+        hThAsD->SetLineStyle(1);
+
+        //hThNLL->SetLineWidth(2);
+        //hThNNLO->SetLineWidth(2);
+        //hThNLL->SetLineColor(kBlue);
+        //hThNNLO->SetLineColor(kMagenta);
 
 
         hThScU->Draw("hist same ][");
         hThScD->Draw("hist same ][");
         hThPdfU->Draw("hist same ][");
         hThPdfD->Draw("hist same ][");
-
-        if(Year != "16ak7") {
-            hThNLL->Draw("hist same ][");
-            hThNNLO->Draw("hist same ][");
-        }
+        hThAsU->Draw("hist same ][");
+        hThAsD->Draw("hist same ][");
 
 
 
-        hStat->SetMarkerStyle(20);
-        hStat->SetLineColor(kBlack);
-        hStat->SetMarkerColor(kBlack);
-        hStat->Draw("e0  same");
 
-        GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+        if(y == 3) GetXaxis()->SetTitle("Jet p_{T} (GeV)");
         GetXaxis()->SetNoExponent();
         GetXaxis()->SetMoreLogLabels();
-        GetYaxis()->SetTitle("Ratio to NLOJet++ CT14");
+        GetYaxis()->SetTitle("Theoretical Uncertainty");
         //GetYaxis()->SetRangeUser(0.1, 2.5);
         GetYaxis()->SetRangeUser(0.7, 1.5);
 
-        SetFTO({20}, {10}, {1.15, 2.1, 0.3, 2.73});
+        SetFTO({16}, {10}, {1.15, 2.1, 0.3, 2.73});
 
         if(y == 0) GetXaxis()->SetRangeUser(97, 3103);
         if(y == 1) GetXaxis()->SetRangeUser(97, 2940);
@@ -154,7 +218,34 @@ void plotTheorUnc(TString Year)
         if(y == 3) GetXaxis()->SetRangeUser(97, 2000);
 
 
+        if(y == 0) {
+            auto leg = newLegend(kPos7);
+            leg->AddEntry((TObject*)0,  "", "h");
+            int R = Tag.Contains("ak4") ? 4 : 7;
+            leg->AddEntry((TObject*)0, "#sqrt{s} = 13TeV" , "h");
+            leg->AddEntry((TObject*)0, Form("anti-k_{T} (R=0.%d)", R) , "h");
+            leg->AddEntry((TObject*)0,  pdf+" PDF", "h");
+            DrawLegends({leg}, true);
+        }
 
+
+
+        if(y == 1) {
+            auto leg = newLegend(kPos7);
+            leg->AddEntry((TObject*)0,  "", "h");
+            leg->AddEntry(hThScU,  "Scale unc.", "l");
+            leg->AddEntry(hThPdfU, "PDF unc.", "l");
+            leg->AddEntry(hThAsU,  "#alpha_{S} unc.", "l");
+            leg->AddEntry(grTot,  "Total unc.", "f");
+            DrawLegends({leg}, true);
+        }
+
+
+        DrawLatexUp(-1,  yBins[y]);
+
+        RemoveOverlaps(gPad, GetXaxis());
+
+        /*
         auto leg = newLegend(kPos7);
 
         leg->SetNColumns(2);
@@ -173,13 +264,14 @@ void plotTheorUnc(TString Year)
         else leg->AddEntry((TObject*)0,  "", "");
 
         DrawLegends({leg}, true);
+        */
 
         UpdateFrame();
 
-        can->Print(Form("plots/data%s_y%d.pdf", Year.Data(), y));
     }
+    can->Print(Form("plots/Theor_%s_%s.pdf", pdf.Data(), Tag.Data()));
 }
-*/
+
 
 
 
@@ -363,12 +455,6 @@ void plotJetsLog(TString Year)
     can->Print(Form("plots/dataLog%s.pdf", Year.Data()));
 
 }
-
-
-
-
-
-
 
 
 
@@ -834,9 +920,15 @@ void plotAsScan(TString pdfName)
 }
 
 
+//Plot theor unc for several PDFs
+void plotTheorUncAll()
+{
+    for(auto pdf :  {"CT14nlo", "HERAPDF20_NLO", "NNPDF31_nlo", "ABMP16_5_nlo"}) {
+        plotTheorUnc("16ak4", pdf);
+        plotTheorUnc("16ak7", pdf);
+    }
 
-
-
+}
 
 
 
@@ -846,7 +938,12 @@ void plotJets()
    //compareRatio("16", "15"); 
    //compareRatio("16", "16m");
    //compareRatio("16ak7", "15ak7");
-   plotRatio("16p"); 
+   //plotRatio("16"); 
+
+    plotTheorUncAll();
+    //plotTheorUnc("16ak4", "CT14nlo");
+    //plotTheorUnc("16ak7", "CT14nlo");
+
 
    //plotJetsLog("16n");
    //plotJetsLog("16");
