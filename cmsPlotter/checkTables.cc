@@ -133,7 +133,8 @@ int main(int argc, char** argv){
     //vector<TH1D*> readHisto(fastNLOLHAPDF &fnlo, TString tabName, TString pdfName)
 
     //say::SetGlobalVerbosity(say::DEBUG);
-    fastNLOLHAPDF fnloOld("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT14nlo", 0);
+    //fastNLOLHAPDF fnloOld("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "CT14nlo", 0);
+    fastNLOLHAPDF fnloOld("theorFiles/suman/Fnlo_AK4_Eta1.tab", "CT14nlo", 0);
     fastNLOLHAPDF fnloNew("theorFiles/InclusiveNJets_fnl5362h_v23_fix.tab", "CT14nlo", 0);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,0,true);
     fnloOld.SetContributionON(fastNLO::kFixedOrder,1,true);
@@ -158,7 +159,7 @@ int main(int argc, char** argv){
 
     DividePad( {1,1,1,1,1}, {1});
 
-    for(int yB = 0; yB < 5; ++yB) {
+    for(int yB = 0; yB < oldH.size() && yB < newH.size(); ++yB) {
 
         TH1D *oldHH = rebin(oldH[yB], newH[yB]);
 

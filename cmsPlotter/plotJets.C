@@ -491,10 +491,13 @@ void plotRatio(TString Year)
 
         SetFTO({20}, {10}, {1.15, 2.1, 0.3, 2.73});
 
-        if(y == 0) GetXaxis()->SetRangeUser(97, 3103);
-        if(y == 1) GetXaxis()->SetRangeUser(97, 2940);
-        if(y == 2) GetXaxis()->SetRangeUser(97, 2787);
-        if(y == 3) GetXaxis()->SetRangeUser(97, 2000);
+        //const double magNum = 97; 
+        const double magNum = 74; 
+
+        if(y == 0) GetXaxis()->SetRangeUser(magNum, 3103);
+        if(y == 1) GetXaxis()->SetRangeUser(magNum, 2940);
+        if(y == 2) GetXaxis()->SetRangeUser(magNum, 2787);
+        if(y == 3) GetXaxis()->SetRangeUser(magNum, 2000);
 
 
 
@@ -843,10 +846,10 @@ void plotJets()
    //compareRatio("16", "15"); 
    //compareRatio("16", "16m");
    //compareRatio("16ak7", "15ak7");
-   //plotRatio("16ak7"); 
+   plotRatio("16p"); 
 
-   plotJetsLog("16ak7");
-   plotJetsLog("16");
+   //plotJetsLog("16n");
+   //plotJetsLog("16");
 
    return;
 

@@ -18,7 +18,7 @@ struct Fitter {
     void load(TString fName) {
         TFile *f = TFile::Open(fName);
         //vector<TString> pdfNames = {"CT14nlo", "HERAPDF20_NLO", "NNPDF31_nnlo"};
-        vector<TString> pdfNames = {"CT14nlo"};
+        vector<TString> pdfNames = {"CT14nlo", "NNPDF31_nnlo"};
         for(auto nPdf : pdfNames) {
             vector<vector<TGraph*>> gyVec(7), gptVec(7);
             vector<TGraph*> gVecAll(7);
@@ -52,10 +52,11 @@ struct Fitter {
         }
     }
 
-    vector<double> fitAs(TGraph *gr)
+    vector<double> fitAs(TGraph *gr, TF1 **Fit = nullptr)
     {
-        TF1 *fit = new TF1(rn(), "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", -15, 10);
-        gr->Fit(fit, "", "", 0.110, 0.220);
+        auto &fit = *Fit;
+        fit = new TF1(rn(), "[0] + [1]*x + [2]*x*x + [3]*x*x*x + [4]*x*x*x*x", -15, 10);
+        gr->Fit(fit, "N", "", 0.110, 0.220);
         double asMin = fit->GetMinimumX();
         double chi2Min = fit->Eval(asMin);
         double shLow  = fit->GetX(chi2Min + 1, -15, asMin);
@@ -88,15 +89,90 @@ struct Fitter {
         }
 
 
-        vector<double> res = fitAs(grNow[0]);
+        TF1 *fD;
+        vector<double> res = fitAs(grNow[0], &fD);
         double scaleMin = 100, scaleMax = -100;
         for(int s = 0; s < 7; ++s) {
-            vector<double> resS = fitAs(grNow[s]);
+            TF1 *fDd;
+            vector<double> resS = fitAs(grNow[s], &fDd);
             scaleMin = min(scaleMin, resS[0]);
             scaleMax = max(scaleMax, resS[0]);
         }
         return {res[0], res[1], res[2],  scaleMax - res[0], res[0] - scaleMin };
     }
+
+
+    void plotChi2Fit(TString pdfName, int y) {
+
+       cout << __LINE__ << endl;
+
+        TCanvas *can = new TCanvas(rn(), "", 600, 600);
+        can->SetLeftMargin(0.15);
+
+
+       cout << __LINE__ << endl;
+        vector<TGraph*> grNow;
+        for(int s = 0; s < 7; ++s)
+            grNow.push_back(grY.at(pdfName)[s][y]);
+
+       cout << __LINE__ << endl;
+        grNow[0]->SetMarkerStyle(20);
+
+       cout << __LINE__ << endl;
+        grNow[0]->Draw("ap");
+        for(int s = 1; s < 7; ++s) {
+
+            TF1 *fNow = (TF1*) grNow[s]->GetListOfFunctions()->At(0);
+            fNow->SetLineColor(kBlack);
+            fNow->SetLineWidth(1);
+            fNow->SetLineStyle(2);
+            grNow[s]->SetMarkerStyle(4);
+            grNow[s]->Draw("p same");
+
+        }
+
+       cout << __LINE__ << endl;
+
+        TF1 *fRes = nullptr;
+        vector<double> res = fitAs(grNow[0], &fRes);
+        cout << "Pusinka " << fRes << endl;
+        double val = fRes->Eval(res[0]);
+        TLine *line = new TLine;
+        line->SetLineColor(kRed);
+        line->SetLineWidth(2);
+        line->DrawLine(res[0]-res[2], val+1, res[0] + res[1], val+1);
+        line->DrawLine(res[0], val, res[0], val+1);
+
+
+       cout << __LINE__ << endl;
+
+        double scaleMin = res[0], scaleMax = res[0];
+        for(int s = 1; s < 7; ++s) {
+            TF1 *f;
+            vector<double> resS = fitAs(grNow[s], &f);
+            scaleMin = min(scaleMin, resS[0]);
+            scaleMax = max(scaleMax, resS[0]);
+        }
+        line->SetLineColor(kBlue);
+        cout << "ScaleMin ScaleMax " << scaleMin <<" "<< scaleMax << endl;
+        line->DrawLine(scaleMin, val+0, scaleMax, val+0);
+
+
+       cout << __LINE__ << endl;
+
+        GetXaxis()->SetTitle("#alpha_{S}(M_{Z})");
+        GetYaxis()->SetTitle("#chi^{2}");
+
+       cout << __LINE__ << endl;
+        TLegend *leg = newLegend(kPos8c);
+        leg->AddEntry((TObject*)0, "|y| < 0.5", "h");
+        leg->AddEntry((TObject*)0, Form("#alpha_{s} = %.4f^{+%.4f}_{-%.4f} (exp)^{+%.4f}_{-%.4f}(scl)", res[0], res[1], res[2], scaleMax-res[0], res[0]-scaleMin), "h");
+        leg->SetFillStyle(1001);
+        DrawLegends({leg});
+
+        can->SaveAs("asFitChi2_" + pdfName + ".pdf");
+    }
+
 
     void plotYdep(TString pdfName)
     {
@@ -112,8 +188,8 @@ struct Fitter {
             gr->SetPointError(y, 0.25, 0.25, res[2], res[1]);
 
             grS->SetPoint(y, y*0.5 + 0.25, res[0]);
-            //grS->SetPointError(y, 0, 0, hypot(res[2],res[4]) , hypot(res[1],res[3]) );
-            grS->SetPointError(y, 0.25, 0.25, res[4] , res[3] );
+            grS->SetPointError(y, 0.25, 0.25, hypot(res[2],res[4]) , hypot(res[1],res[3]) );
+            //grS->SetPointError(y, 0.25, 0.25, res[4] , res[3] );
 
         }
 
@@ -124,31 +200,48 @@ struct Fitter {
         grTot->SetPointError(0, 1.0, 1.0, res[2], res[1]);
         TGraphAsymmErrors *grTotS = new TGraphAsymmErrors();
         grTotS->SetPoint(0, 1.0, res[0]);
-        grTotS->SetPointError(0, 1.0, 1.0, res[4], res[3]);
+        //grTotS->SetPointError(0, 1.0, 1.0, res[4], res[3]);
+        grTotS->SetPointError(0, 1.0, 1.0, hypot(res[2],res[4]) , hypot(res[1],res[3]) );
 
 
+        TCanvas *can = new TCanvas(rn(), "", 600, 600);
+        can->SetLeftMargin(0.15);
+
+
+        //grTotS->SetFillColor(kBlue);
+        grTotS->SetLineColor(kRed);
+        grTotS->SetLineWidth(0);
+        //grTotS->SetFillStyle(3315);
+        //grTotS->Draw("a le2");
+        grTotS->Draw("a le2");
 
         grTot->SetFillColor(kOrange);
+        grTot->SetFillStyle(3144);
         grTot->SetLineColor(kRed);
-        grTot->Draw("a le2");
+        grTot->SetLineWidth(2);
+        //grTot->Draw("le2 same");
+        /*
+        TLine *l = new TLine();
+        l->SetLineColor(kRed);
+        l->DrawLine(0, res[0], 2, res[0]);
+        */
 
-        grTotS->SetFillColor(kBlue);
-        grTotS->SetLineColor(kRed);
-        grTotS->Draw("le2 same");
 
+        //grS->SetLineColor(kRed);
+        grS->Draw("p same");
 
-        gr->Draw("* same");
-        grS->SetLineColor(kRed);
-        grS->Draw("* same");
+        gr->SetMarkerStyle(20);
+        gr->Draw("p same");
 
         GetXaxis()->SetRangeUser(0, 2);
-        GetYaxis()->SetRangeUser(0.095, 0.125);
+        GetYaxis()->SetRangeUser(0.105, 0.125);
 
         GetXaxis()->SetTitle("|y|");
         GetYaxis()->SetTitle("#alpha^{NLO}_{S}(M_{Z})");
 
         UpdateFrame();
 
+        can->SaveAs("asYdep_" + pdfName + ".pdf");
 
     }
 
@@ -224,13 +317,18 @@ void plotChi2()
 {
     Fitter fitter;
     fitter.load("chi2.root");
-    //fitter.plotYdep("CT14nlo");
+    //fitter.load("chi2noCorr.root");
+    fitter.plotYdep("CT14nlo");
+    //fitter.plotYdep("NNPDF31_nnlo");
 
-    fitter.plotPtDep("CT14nlo");
+    return;
+    fitter.plotChi2Fit("CT14nlo", 0);
+
+
+    //fitter.plotPtDep("CT14nlo");
 
     //fitter.plotYdep("HERAPDF20_NLO");
 
-    //fitter.plotYdep("NNPDF31_nnlo");
 
 
 }

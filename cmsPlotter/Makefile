@@ -59,7 +59,7 @@ plotJets: plotJets.cc
 	-o $@
 
 calcTheory: calcTheory.cc
-	$(CC) -g  calcTheory.cc $(LDFLAGS) -I../PlottingHelper/ \
+	$(CC) -g -O2  calcTheory.cc $(LDFLAGS) -I../PlottingHelper/ \
 	$(ROOT_INCLUDE)  -I$(FastNLOInstallDir)/include -L$(FastNLOInstallDir)/lib -lfastnlotoolkit \
 	-L../PlottingHelper/ -lPlottingHelper -Wl,-rpath,../PlottingHelper   \
 	-I$(LHA_INCLUDE)     \
@@ -71,7 +71,7 @@ calcTheory: calcTheory.cc
 
 
 fitTheory: fitTheory.cc
-	$(CC) -g  $< $(LDFLAGS) -I../PlottingHelper/ \
+	$(CC) -g -O2  $< $(LDFLAGS) -I../PlottingHelper/ \
 	$(ROOT_INCLUDE)  -I$(FastNLOInstallDir)/include -L$(FastNLOInstallDir)/lib -lfastnlotoolkit \
 	-L../PlottingHelper/ -lPlottingHelper -Wl,-rpath,../PlottingHelper   \
 	-I$(LHA_INCLUDE)     \

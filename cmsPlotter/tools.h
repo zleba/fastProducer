@@ -16,7 +16,7 @@ inline std::vector<double> getRange(double asMin, double asMax, double st = 0.00
 }
 
 
-static const vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 2500, 3103};
+static const std::vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 2500, 3103};
 
 static const std::map<TString, std::vector<double> > pdfAsVals =  {
     {"CT14nlo",  getRange(0.111, 0.123) },
@@ -25,9 +25,15 @@ static const std::map<TString, std::vector<double> > pdfAsVals =  {
     {"HERAPDF20_NLO",  getRange(0.111, 0.123) },
     {"HERAPDF20_NNLO", getRange(0.111, 0.123) }, 
 
-    {"NNPDF31_nnlo",  {0.112, 0.114, 0.116, 0.117, 0.118, 0.119, 0.120,  0.122}}
-};
+    {"NNPDF31_nnlo",  {0.112, 0.114, 0.116, 0.117, 0.118, 0.119, 0.120,  0.122}},
+    {"NNPDF31_nlo",  {0.116, 0.118, 0.120}},
 
+    {"ABMP16_5_nlo", {0.114, 0.115, 0.116, 0.117, 0.118, 0.119, 0.120, 0.121, 0.122, 0.123}},
+    {"ABMP16_5_nnlo", {0.112, 0.113, 0.114, 0.115, 0.116, 0.117, 0.118, 0.119, 0.120}},
+
+    {"MMHT2014nlo68cl", {0.120}},
+    {"MMHT2014nnlo68cl", {0.118}},
+};
 
 
 
@@ -40,7 +46,16 @@ inline void applyNPEW(TH1D *h, int y,  TString Year)
     int tag = Year.Contains("15") ? 15 : 16;
 
     TH1D *hEW = dynamic_cast<TH1D*>( fNPEW->Get(Form("ew%d_ak4_y%d", tag, y)));
-    TH1D *hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak4_y%d", tag, y)));
+
+    TH1D *hNP;
+    
+    if(Year != "16ak7" || Year != "15ak7")
+        hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak4_y%d", tag, y)));
+    else {
+        TFile *fNP  = TFile::Open("theorFiles/suman/Final_NPCorrection_Xsection.root");  //NP+EW corrections
+        hNP = dynamic_cast<TH1D*>( fNP->Get(Form("NPCorrection_Xsection_AK7_Eta%d", y+1 )));
+    }
+
     if(!hEW || !hNP) {
         std::cout << "Histogram is missing in np_ew.root file" << std::endl;
         std::exit(0);

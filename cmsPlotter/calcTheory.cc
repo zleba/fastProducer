@@ -38,6 +38,8 @@ TString rn() {return Form("%d",rand());}
 
 using namespace std;
 
+//Read 2D histogram to the vector, index is rapidity, theory is given by fnlo
+//Histograms have no error
 vector<TH1D*> readHisto(fastNLOAlphas &fnlo)
 {
     //fnlo.SetScaleFactorsMuRMuF(1.0, 1.0);
@@ -88,6 +90,8 @@ vector<TH1D*> readHisto(fastNLOAlphas &fnlo)
     return hists;
 }
 
+//Get vector of histograms which includes scale unc
+//(cnt, scaleUp, scaleDn)
 vector<vector<TH1D*>> getScaleuncHistos(fastNLOAlphas &fnlo)
 {
     fnlo.SetLHAPDFMember(0);
@@ -224,7 +228,7 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName, int R)
         else if(R == 7) inFile = "theorFiles/InclusiveNJets_fnl5332h_v23_fix.tab";
         else assert(1);
 
-        fastNLOAlphas  fnlo(inFile, whole.Data(), 0);
+        fastNLOAlphas  fnlo(inFile.Data(), whole.Data(), 0);
         //fastNLOAlphas  fnlo("theorFiles/suman/Fnlo_AK7_Eta1.tab", whole.Data(), 0);
         fnlo.SetAlphasMz(as, true);
 
@@ -260,12 +264,54 @@ vector<vector<TH1D*>> getAsScaleuncHistos(TString pdfName, int R)
 
 
 
-
-
+//Get histogram including up and dn pdf variation 
 vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
 {
     fnlo.SetLHAPDFMember(0);
     fnlo.SetScaleFactorsMuRMuF(1, 1);
+
+    int nPDFs = fnlo.GetNPDFMembers();
+
+    vector<vector<TH1D*>> histos;
+    for(int i = 0; i < nPDFs; ++i) {
+        fnlo.SetLHAPDFMember(i);
+        histos.push_back(readHisto(fnlo));
+    }
+
+    vector<TH1D*> hCnt(histos[0].size());
+    vector<TH1D*> hUp(histos[0].size());
+    vector<TH1D*> hDn(histos[0].size());
+
+    for(int y = 0; y < histos[0].size(); ++y) { //loop over y-bins
+
+        hCnt[y] = (TH1D*) histos[0][y]->Clone(rn());
+        hUp[y] = (TH1D*) histos[0][y]->Clone(rn());
+        hDn[y] = (TH1D*) histos[0][y]->Clone(rn());
+
+        for(int i = 1; i <= histos[0][y]->GetNbinsX(); ++i) { //loop over pt-bins
+            double cnt = histos[0][y]->GetBinContent(i);
+            double up = 0, dn = 0;
+            for(int s = 1; s < nPDFs; ++s) { //loop over scales
+                double err  = histos[s][y]->GetBinContent(i) - cnt;
+                up = hypot(up, max(0.0, err));
+                dn = hypot(dn, max(0.0,-err));
+            }
+            hCnt[y]->SetBinContent(i, cnt);
+            hUp[y]->SetBinContent(i, cnt + up);
+            hDn[y]->SetBinContent(i, cnt - dn);
+        }
+    }
+    return {hCnt, hUp, hDn};
+}
+
+
+//Get histogram including up and dn pdf variation 
+vector<vector<TH1D*>> getAsHistos(fastNLOAlphas &fnlo)
+{
+    fnlo.SetLHAPDFMember(0);
+    fnlo.SetScaleFactorsMuRMuF(1, 1);
+
+    fnlo.SetAlphasMz(as, true);
 
     int nPDFs = fnlo.GetNPDFMembers();
 
@@ -310,6 +356,7 @@ vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
 
 
 
+//rebin differential histo according to template
 TH1D *rebin(TH1D *h, TH1D *hTemp) //second is template
 {
     TH1D *hNew = (TH1D *) hTemp->Clone(rn());
@@ -361,7 +408,7 @@ void SaveHistosByTitle(vector<vector<TH1D*>> hist)
         for(int y = 0; y < hist[s].size(); ++y) {
             //TString n = tag +"_"+ sysTag[s] +"_"+ Form("y%d", y);
             TString n = hist[s][y]->GetTitle();
-            cout << "Pusa " << s <<" "<< y <<" : "<<  n << endl;
+            cout << "Saving to root " << s <<" "<< y <<" : "<<  n << endl;
             hist[s][y]->SetName(n);
             hist[s][y]->Write(n);
         }
@@ -369,36 +416,20 @@ void SaveHistosByTitle(vector<vector<TH1D*>> hist)
 }
 
 
-
-void scanAs()
+//Create the root file with many theoryes 
+void scanAsToFile(int R)
 {
-    //vector<TString> pdfList = {"CT14nlo", "CT14nnlo", "HERAPDF20_NLO", "HERAPDF20_NNLO",   "NNPDF31_nlo", "NNPDF31_nnlo", "ABMP16_5_nlo", "ABMP16_5_nnlo"};
-    vector<TString> pdfList = { "ABMP16_5_nlo", "ABMP16_5_nnlo"};
+    vector<TString> pdfList = {"CT14nlo", "CT14nnlo", "HERAPDF20_NLO", "HERAPDF20_NNLO",   "NNPDF31_nlo", "NNPDF31_nnlo", "ABMP16_5_nlo", "ABMP16_5_nnlo"};
+    //vector<TString> pdfList = { "ABMP16_5_nlo", "ABMP16_5_nnlo"};
 
 
-    TFile *fOut = new TFile("cmsJetsAsScanAK7n.root", "RECREATE");
+    TFile *fOut = new TFile(Form("cmsJetsAsScan_ak%d.root",R), "RECREATE");
 
     for(auto pdf : pdfList) {
         vector<vector<TH1D*>> histPDF    = getAsScaleuncHistos(pdf, 4);
         SaveHistosByTitle(histPDF);
     }
 
-    /*
-    vector<vector<TH1D*>> histAsCTnlo    = getAsScaleuncHistos("CT14nlo");
-    //vector<vector<TH1D*>> histAsCTnnlo   = getAsScaleuncHistos("CT14nnlo");
-    vector<vector<TH1D*>> histAsHERAnlo  = getAsScaleuncHistos("HERAPDF20_NLO");
-    //vector<vector<TH1D*>> histAsHERAnnlo = getAsScaleuncHistos("HERAPDF20_NNLO");
-
-    //vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
-    vector<vector<TH1D*>> histAsNNPDF = getAsScaleuncHistos("NNPDF31_nnlo");
-
-
-    //SaveHistosByTitle(histAsCTnlo);
-    SaveHistosByTitle(histAsCTnlo);
-    //SaveHistosByTitle(histAsHERAnlo);
-    SaveHistosByTitle(histAsHERAnlo);
-    SaveHistosByTitle(histAsNNPDF);
-    */
     fOut->Write();
     fOut->Close();
 }
@@ -446,11 +477,12 @@ int main(int argc, char** argv){
 
 	SetGlobalVerbosity(ERROR);
 
-    TFile *fOut = new TFile("theorFiles/cmsJetsNLO_AK7.root", "RECREATE");
 
-    scanAs();
+    scanAsToFile(4);
+    scanAsToFile(7);
     return 0;
 
+    TFile *fOut = new TFile("theorFiles/cmsJetsNLO_AK7.root", "RECREATE");
 
     //calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec001.tab", "Old", "CT14nlo");
     calcXsections("theorFiles/fastnlo-cms-incjets-arxiv-1605.04436-xsec000.tab", "Old", "CT14nlo");
