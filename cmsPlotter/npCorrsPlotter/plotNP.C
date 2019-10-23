@@ -12,7 +12,7 @@ using namespace PlottingHelper;//pollute the namespace!
 
 TString rn() {return Form("%d",rand());}
 
-vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1",  "1 < |y| < 1.5", "1.5 < |y| < 2", "2 < |y| < 2.5"};
+vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1.0",  "1.0 < |y| < 1.5", "1.5 < |y| < 2.0", "2.0 < |y| < 2.5"};
 
 using namespace std;
 
@@ -51,19 +51,7 @@ TH1D *rebinCorr(TH1D *h, TH1D *hTemp) //second is template
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-TObject *getSafe(TFile *f, TString str)
+TObject *getSafe (TFile *f, TString str)
 {
     TObject *obj = f->Get(str);
     if(!obj) {
@@ -73,7 +61,7 @@ TObject *getSafe(TFile *f, TString str)
     //return obj;
 }
 
-TGraphAsymmErrors *getEnvelope(vector<TH1D*> hs)
+TGraphAsymmErrors *getEnvelope (vector<TH1D*> hs)
 {
     TGraphAsymmErrors *gr = new TGraphAsymmErrors(hs[0]->GetNbinsX());
     for(int i = 1; i <= hs[0]->GetNbinsX(); ++i) {
@@ -95,14 +83,81 @@ TGraphAsymmErrors *getEnvelope(vector<TH1D*> hs)
     return gr;
 }
 
+
+void printEnvelope(vector<vector<TH1D*>> hs)
+{
+
+    vector<int> bins = {56  , 74  , 97  , 133 , 174 , 220 , 272 , 330 , 395 , 468 , 548 , 638 , 737 , 846 , 967 , 1101, 1248, 1410, 1588, 1784, 2000, 2238, 2500, 2787, 3103, 3450, 3832,};
+    vector<int> edges= {3832, 3450, 3103, 2238, 2000};
+
+
+    for(int iy = 0; iy < hs[0].size(); ++iy) {
+
+        for(int ipt = 0; ipt < bins.size()-1; ++ipt) {
+            int pt1 = bins[ipt];
+            int pt2 = bins[ipt+1];
+            if(pt2 > edges[iy]) continue;
+
+            double Max = -1e10, Min = 1e10;
+            for(int i = 1; i <= hs[0][0]->GetNbinsX(); ++i) {
+
+                double ptL   = hs[0][0]->GetXaxis()->GetBinLowEdge(i);
+                double ptH   = hs[0][0]->GetXaxis()->GetBinUpEdge(i);
+                if(int(round(ptL)) != pt1) continue;
+                if(int(round(ptH)) != pt2) continue;
+                for(int n = 0; n < hs.size(); ++n) {
+                    auto &h = hs[n][iy];
+                    Max = max(Max, h->GetBinContent(i) + h->GetBinError(i));
+                    Min = min(Min, h->GetBinContent(i) - h->GetBinError(i));
+                }
+            }
+
+            double corr    = (Max + Min)/2;
+            double corrErr = (Max - Min)/2;
+
+            if(Max == -1e10 || Min == 1e10) {corr = 1; corrErr = 0; }
+            cout << iy*0.5 <<" "<< (iy+1)*0.5 <<" "<< pt1 <<" "<< pt2 << " "<<  corr <<" "<< corrErr << endl;
+
+        }
+
+        /*
+        for(int i = 1; i <= hs[0][0]->GetNbinsX(); ++i) {
+
+            double Max = -1e10, Min = 1e10;
+            for(int n = 0; n < hs.size(); ++n) {
+                auto &h = hs[n][iy];
+                Max = max(Max, h->GetBinContent(i) + h->GetBinError(i));
+                Min = min(Min, h->GetBinContent(i) - h->GetBinError(i));
+            }
+
+            double corr    = (Max + Min)/2;
+            double corrErr = (Max - Min)/2;
+            double ptL   = hs[0][0]->GetXaxis()->GetBinLowEdge(i);
+            double ptH   = hs[0][0]->GetXaxis()->GetBinUpEdge(i);
+            double ptErr = hs[0][0]->GetBinWidth(i)/2;
+            //gr->SetPoint(i, x, y);
+            //gr->SetPointError(i, xerr, xerr, yerr, yerr);
+
+            //cout << x <<" "<< y << " "<< yerr << endl;
+            cout << iy*0.5 <<" "<< (iy+1)*0.5 <<" "<< ptL <<" "<< ptH << " "<< corr <<" "<< corrErr << endl;
+        }
+        */
+    }
+}
+
+
+
+
+
 //Load correction from file fHad / fNoHad
 pair<vector<TH1D*>, vector<TH1D*>> loadCorr(TFile *fHad, TFile *fNoHad)
 {
+    //contains nameIndex + y bin
     vector<TH1D*> NPak4, NPak7;
     for(int R : vector<int>({4, 7})) {
         //cout << R << endl;
         vector<TH1D*> NPnow;
-        for(int y = 0; y < 4; ++y) {
+        for(int y = 0; y < 5; ++y) {
             TH1D *hHad   = (TH1D*) getSafe(fHad,Form("CMS_2019_incJets/ak%d_y%d",R,y));
             TH1D *hNoHad = (TH1D*) getSafe(fNoHad,Form("CMS_2019_incJets/ak%d_y%d",R,y));
             if(!hNoHad) {
@@ -110,13 +165,15 @@ pair<vector<TH1D*>, vector<TH1D*>> loadCorr(TFile *fHad, TFile *fNoHad)
                 exit(1);
             }
 
+            /*
             //Rebin to the smaller histogram
             if(hHad->GetNbinsX() > hNoHad->GetNbinsX())
                 hHad = rebinCorr(hHad, hNoHad);
             if(hHad->GetNbinsX() < hNoHad->GetNbinsX())
                 hNoHad = rebinCorr(hNoHad, hHad);
+            */
 
-            cout <<"Radek " <<  hHad->GetNbinsX() << " "<< hNoHad->GetNbinsX() << endl;
+            //cout <<"Radek " <<  hHad->GetNbinsX() << " "<< hNoHad->GetNbinsX() << endl;
             hHad->Divide(hNoHad);
             NPnow.push_back(hHad);
         }
@@ -135,8 +192,9 @@ struct plotter {
     vector<TH1D*> NPak4Hg_MPI, NPak7Hg_MPI;
 
 
-    void loadData() {
-        vector<TString> names = {"QCD_Pt-15to7000_TuneCP5_Flat_13TeV_pythia8", // "QCD_Pt-15to7000_TuneCP1_Flat_13TeV_pythia8", "QCD_Pt-15to7000_Tune4C_Flat_13TeV_pythia8",
+    void loadData ()
+    {
+        vector<TString> names = {"QCD_Pt-15to7000_TuneCP5_Flat_13TeV_pythia8",  "QCD_Pt-15to7000_TuneCP1_Flat_13TeV_pythia8", "QCD_Pt-15to7000_Tune4C_Flat_13TeV_pythia8",
                                  "QCD_Pt-15to7000_TuneCUETHS1_Flat_13TeV_herwigpp",
                                  "QCD_Pt-15to7000_TuneCH3_Flat_13TeV_herwig7" };
 
@@ -161,18 +219,19 @@ struct plotter {
         }
     }
 
-    void plotNP(int R) {
+    void plotNP (int R)
+    {
 
-        TCanvas *can = new TCanvas(rn(), "", 1000, 500);
+        TCanvas *can = new TCanvas(rn(), "", 1200, 500);
         SetTopBottom(0.05, 0.14);
         SetLeftRight(0.10, 0.05);
 
         auto &hNP    = (R == 4) ? NPak4 : NPak7;
         auto &hNPmpi = (R == 4) ? NPak4Hg_MPI : NPak7Hg_MPI;
 
-        DividePad({1,1,1,1}, {1});
+        DividePad({1,1,1,1,1}, {1});
 
-        for(int y = 0; y < 4; ++y) {
+        for(int y = 0; y < 5; ++y) {
             can->cd(y+1);
             gPad->SetLogx();
             gPad->SetTicks(1,1);
@@ -183,20 +242,27 @@ struct plotter {
 
 
             //TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y],hNP[2][y],hNP[3][y]} );
-            TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y], hNP[2][y]});
+            TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y], hNP[2][y], hNP[3][y], hNP[4][y]}  );
             gr->SetFillStyle(1001);
             gr->SetFillColor(kOrange);
+            gr->SetLineColor(kOrange);
             gr->Draw("2 same");
 
 
-            hNP[1][y]->Draw("hist e ][ same");
-            hNP[1][y]->Draw("hist ][ same");
+            vector<int> Cols = {kBlue, kMagenta, kGreen+2, kCyan+2};
+            for(int i = 1; i < hNP.size(); ++i) {
+                hNP[i][y]->SetLineColor(Cols[i-1]);
+                hNP[i][y]->SetMarkerColor(Cols[i-1]);
+                hNP[i][y]->SetLineWidth(2);
+                hNP[i][y]->Draw("hist e ][ same");
+                hNP[i][y]->Draw("hist  ][ same");
+            }
 
-            hNP[2][y]->SetLineColor(kMagenta);
-            hNP[2][y]->Draw("hist e ][ same");
-            hNP[2][y]->Draw("hist  ][ same");
 
             hNPmpi[y]->SetLineColor(kRed);
+            hNPmpi[y]->SetMarkerColor(kRed);
+            hNPmpi[y]->SetLineWidth(2);
+            hNPmpi[y]->SetLineStyle(2);
             hNPmpi[y]->Draw("hist e ][ same");
             hNPmpi[y]->Draw("hist  ][ same");
 
@@ -210,9 +276,17 @@ struct plotter {
             hNP[0][y]->Draw("hist  ][ same");
 
 
-            GetYaxis()->SetRangeUser(0.85, 1.25);
+            GetYaxis()->SetRangeUser(0.83, 1.34);
             GetXaxis()->SetMoreLogLabels();
             GetXaxis()->SetNoExponent();
+
+
+            if(y == 0) GetXaxis()->SetRangeUser(74, 3400);
+            if(y == 1) GetXaxis()->SetRangeUser(74, 3103);
+            if(y == 2) GetXaxis()->SetRangeUser(74, 2941);
+            if(y == 3) GetXaxis()->SetRangeUser(74, 2366);
+            if(y == 4) GetXaxis()->SetRangeUser(74, 1410);
+
 
             if(y == 0) GetYaxis()->SetTitle("Non-perturbative correction factor");
             if(y == 3) GetXaxis()->SetTitle("Jet p_{T} (GeV)");
@@ -235,13 +309,30 @@ struct plotter {
                 leg->SetTextSize(PxFontToRel(20));
                 leg->AddEntry((TObject*)0, "", "h");
                 leg->AddEntry(hNP[0][y], "Py8 CP5", "l");
-                //leg->AddEntry(hNP[1][y], "Pythia8 CP1", "l");
-                //leg->AddEntry(hNP[2][y], "Pythia8 4C", "l");
-                leg->AddEntry(hNP[1][y], "Hg++ CUETHS1", "l");
-                leg->AddEntry(hNP[2][y], "Hg7 CH3", "l");
+                leg->AddEntry(hNP[1][y], "Py8 CP1", "l");
+                leg->AddEntry(hNP[2][y], "Py8 4C", "l");
+                DrawLegends({leg}, true);
+            }
+
+
+            else if(y == 2) {
+                auto leg = newLegend(kPos7);
+                leg->SetTextSize(PxFontToRel(20));
+                leg->AddEntry((TObject*)0, "", "h");
+                leg->AddEntry(hNP[3][y], "Hg++ CUETHS1", "l");
+                leg->AddEntry(hNP[4][y], "Hg7 CH3", "l");
                 leg->AddEntry(hNPmpi[y], "Hg7 CH3 (Had)", "l");
                 DrawLegends({leg}, true);
             }
+            else if(y == 3) {
+                auto leg = newLegend(kPos7);
+                leg->SetTextSize(PxFontToRel(20));
+                leg->AddEntry((TObject*)0, "", "h");
+                leg->AddEntry(gr, "unc. envelope", "f");
+                DrawLegends({leg}, true);
+            }
+
+
 
             UpdateFrame();
 
@@ -260,15 +351,16 @@ struct plotter {
 
 };
 
-void plotNP()
+void plotNP ()
 {
 
     plotter pl;
     pl.loadData();
-    pl.plotNP(7);
-    pl.plotNP(4);
 
+    printEnvelope(pl.NPak7);
 
+    //pl.plotNP(7);
+    //pl.plotNP(4);
 
 
 

@@ -28,6 +28,7 @@ def getVals(fName):
             if y not in sigmaTab:
                 sigmaTab[y] = []
             sigmaTab[y].append( [ptL, ptH, sigma] )
+    f.close()
     return sigmaTab
 
 def divideTabs(sigmaTab, sigmaTabNll):
@@ -50,15 +51,29 @@ def divideTabs(sigmaTab, sigmaTabNll):
             corrTab[y].append( [ptL, ptH, c2 / c1] )
     return corrTab
 
-def printToFile(corrTab):
+def printToFile(corrTab, R):
+
+    bins = [56  , 74  , 97  , 133 , 174 , 220 , 272 , 330 , 395 , 468 , 548 , 638 , 737 , 846 , 967 , 1101, 1248, 1410, 1588, 1784, 2000, 2238, 2500, 2787, 3103, 3450, 3832,]
+    edges= [3832, 3450, 3103, 2238, 2000]
+
+    fOut = open("kFactorNLL_ak"+str(R)+".txt","w")
+
     for y in corrTab:
-        for l in corrTab[y]:
-            print y*0.5, (y+1)*0.5, l[0], l[1], l[2]
+        for ptL, ptH  in zip(bins, bins[1:]):
+            if ptH > edges[y]: continue
+            #print ptL, ptH
+            corr = 1
+            for l in corrTab[y]:
+                if l[0] == ptL and l[1] == ptH:
+                    corr = l[2]
+            #print y*0.5, (y+1)*0.5, ptL, ptH, corr
+            fOut.write(str(y*0.5) +' '+ str((y+1)*0.5) +' '+ str(ptL) +' '+ str(ptH) +' '+ str(corr) + '\n')
+    fOut.close()
 
-R = 7
-sigmaTab    = getVals("table-cms13TeV-R0"+str(R)+".tex")
-sigmaTabNll = getVals("table-cms13TeV-R0"+str(R)+"-nll.tex")
 
-corr = divideTabs(sigmaTab, sigmaTabNll)
-#print corr
-printToFile(corr)
+for R in (4, 7):
+    sigmaTab    = getVals("table-cms13TeV-R0"+str(R)+".tex")
+    sigmaTabNll = getVals("table-cms13TeV-R0"+str(R)+"-nll.tex")
+
+    corr = divideTabs(sigmaTab, sigmaTabNll)
+    printToFile(corr, R)

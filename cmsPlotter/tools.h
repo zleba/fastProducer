@@ -15,6 +15,20 @@ inline std::vector<double> getRange(double asMin, double asMax, double st = 0.00
     return v;
 }
 
+inline void myAssertFun(bool cond, string str,   int line, string file)
+{
+    if(!cond) {
+        cout << "myAssert: " << str << endl;
+        cout << "File: " << file << endl;
+        cout << "Issue at line " << line << endl;
+        exit(1);
+    }
+}
+
+#undef assert
+#define assert(cond) myAssertFun(cond, #cond,  __LINE__, __FILE__)
+
+
 
 static const std::vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 2500, 3103};
 
@@ -39,21 +53,28 @@ static const std::map<TString, std::vector<double> > pdfAsVals =  {
 
 
 //Apply NP + EW corrections to theory
-inline void applyNPEW(TH1D *h, int y,  TString Year)
+inline void applyNPEW(TH1D *h, int y,  TString Tag)
 {
     TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
 
-    int tag = Year.Contains("15") ? 15 : 16;
+    int year = Tag.Contains("15") ? 15 : 16;
 
-    TH1D *hEW = dynamic_cast<TH1D*>( fNPEW->Get(Form("ew%d_ak4_y%d", tag, y)));
+    int R = Tag.Contains("ak4") ? 4 : 7;
+    TH1D *hEW = dynamic_cast<TH1D*>( fNPEW->Get(Form("ew%d_ak%d_y%d", year, R, y)));
+    assert(hEW);
 
     TH1D *hNP;
     
-    if(Year != "16ak7" || Year != "15ak7")
-        hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak4_y%d", tag, y)));
+    if(Tag.Contains("ak4")) {
+        hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak4_y%d", year, y)));
+        assert(hNP);
+    }
     else {
         TFile *fNP  = TFile::Open("theorFiles/suman/Final_NPCorrection_Xsection.root");  //NP+EW corrections
+        assert(fNP);
+        y = min(3,y);
         hNP = dynamic_cast<TH1D*>( fNP->Get(Form("NPCorrection_Xsection_AK7_Eta%d", y+1 )));
+        assert(hNP);
     }
 
     if(!hEW || !hNP) {
@@ -87,9 +108,9 @@ void applyKfactor(TH1D *h, int y,  TString Tag)
 {
     TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
 
-    TH1D *hCorr = dynamic_cast<TH1D*>( fNPEW->Get(Tag + Form("_ak4_y%d",  y)));
+    TH1D *hCorr = dynamic_cast<TH1D*>( fNPEW->Get(Tag + Form("_y%d",  y)));
     if(!hCorr) {
-        std::cout << "Histogram not found :" << Tag + Form("_ak4_y%d",  y) << std::endl;
+        std::cout << "Histogram not found :" << Tag + Form("_y%d",  y) << std::endl;
         std::exit(0);
     }
 

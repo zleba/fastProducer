@@ -75,7 +75,7 @@ fOut = ROOT.TFile('np_ew.root', 'RECREATE')
 
 #fileName = "ew15_ak4"
 
-for n in ["ew15_ak4", "ew16_ak4", "ew16_ak7", "np15_ak4", "np16_ak4", "kFactorNLL_ak4", "kFactorNNLO_ak4"]:
+for n in ["ew15_ak4", "ew16_ak4", "ew16_ak7", "np15_ak4", "np16_ak4", "kFactorNLL_ak4", "kFactorNNLO_ak4", "kFactorNLL_ak7", "kFactorNNLO_ak7"]:
     corrTab = readTable(n+'.txt')
     writeTable(corrTab, n)
 
