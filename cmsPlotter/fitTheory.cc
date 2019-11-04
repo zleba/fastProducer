@@ -35,6 +35,13 @@ using namespace PlottingHelper;
 
 #include "tools.h"
 
+
+const vector<TString> ErrNames = {
+"nperr", "lumi", "AbsoluteStat",  "AbsoluteScale",  "AbsoluteMPFBias",  "Fragmentation",  "SinglePionECAL",  "SinglePionHCAL",  "FlavorQCD",  "TimePtEta",  "RelativeJEREC1",  "RelativeJEREC2",  "RelativeJERHF",  "RelativePtBB",  "RelativePtEC1",  "RelativePtEC2", "RelativePtHF",  "RelativeBal",  "RelativeSample",  "RelativeFSR",  "RelativeStatFSR",  "RelativeStatEC",  "RelativeStatHF",  "PileUpDataMC",  "PileUpPtRef",  "PileUpPtBB",  "PileUpPtEC1",  "PileUpPtEC2",  "PileUpPtHF",  "fake",  "miss",  "JER",  "PUprof"};
+
+
+
+
 // Function prototype for flexible-scale function 
 double Function_Mu(double s1, double s2 );
 
@@ -46,7 +53,7 @@ TString rn() {return Form("%d",rand());}
 
 using namespace std;
 
-const TString year = "2016";
+const TString year = "16ak4";
 
 TFile *fTh = nullptr;
 
@@ -127,6 +134,10 @@ struct asFitter {
         vector<point> dataNow;
 
         ifstream infile(fName);
+        if(!infile.good()) {
+            cout << "File " << fName <<" does not exist." << endl;
+            exit(1);
+        }
         string line;
         bool isIn = false;
         while (getline(infile, line))
@@ -143,7 +154,12 @@ struct asFitter {
             double flag, nPerL, nPerH, lumi;
             iss >> flag >> p.yMin >> p.yMax >> p.ptMin >> p.ptMax >> p.sigma >> p.errStat >> p.errUnc;
             p.errStat /= 100;
-            p.errUnc /= 100;
+            p.errUnc  /= 100;
+
+            //p.sigma *= 0.97; //RADEK test
+
+            if(abs(p.yMin - 0) < 0.1) //first y-bin 0.5% //RADEK change
+                p.errUnc /= 2;
 
             vector<double> unc;
             iss >> nPerL >> nPerH >> lumi;
@@ -160,12 +176,15 @@ struct asFitter {
             for(auto & e : p.errs) {
                 e /= 100;
             }
+            //p.errs[1] = 0.04; //Radek test
+            //cout << "HelenkaKarel " << p.errs[1] << endl;
 
             if(p.sigma > 0)
                 dataNow.push_back(p);
             //cout << endl << endl;;
             // process pair (a,b)
         }
+        assert(dataNow.size() > 10);
         return dataNow;
 
     }
@@ -185,20 +204,28 @@ struct asFitter {
             vTh.resize(28+1);
         else if(pdfName.Contains("NNPDF31")  && abs(as - 0.118) < 1e-6)
             vTh.resize(100+1);
+        else if(pdfName.Contains("ABMP16_5")  && abs(as - 0.118) < 1e-6)
+            vTh.resize(30);
+        else if(pdfName.Contains("MMHT2014nnlo68cl")  && abs(as - 0.118) < 1e-6)
+            vTh.resize(50+1);
 
         int idCnt = 0;
         for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
             for(int y = 0; y < 5; ++y) {
                 int asI = round(as*1000);
-                vTh[ipdf].push_back( (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale%d_pdf%d",y,asI, s, ipdf) )->Clone(rn())  );
+                TH1D *hTmp = (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale%d_pdf%d",y,asI, s, ipdf) );
+                cout << pdfName+ Form("_y%d_as0%d_scale%d_pdf%d",y,asI, s, ipdf)  << endl;
+                assert(hTmp);
+                TH1D *h = (TH1D*) hTmp->Clone(rn()) ;
+                vTh[ipdf].push_back(h);
             }
         }
 
         for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
             for(int y = 0; y < 5; ++y) {
                 applyNPEW(vTh[ipdf][y],  y, year);
-                applyKfactor(vTh[ipdf][y], y, "kFactorNLL");
-                //applyKfactor(vTh[y], y, "kFactorNNLO");
+                applyKfactor(vTh[ipdf][y], y, "kFactorNLL_ak4");
+                //applyKfactor(vTh[ipdf][y], y, "kFactorNNLO_ak4");
             }
         }
 
@@ -215,6 +242,21 @@ struct asFitter {
                 thHists[pdfName][asI][s] = readHistos(pdfName, as, s);
         }
     }
+
+    //Read theory histograms for PDF pdfName 
+    void readSingleTheory(TString pdfName) {
+        for(auto as: pdfAsVals.at(pdfName)) {
+            int asI = round(as*1000);
+            if(asI != 118) continue;
+            cout << pdfName <<" "<< as << endl;
+            thHists[pdfName][asI].resize(1);
+            for(int s = 0; s < 1; ++s)
+                thHists[pdfName][asI][s] = readHistos(pdfName, as, s);
+        }
+    }
+
+
+
 
 
     //Fill theory to the points in vector<points>, resutl contains also PDF unc.
@@ -239,11 +281,20 @@ struct asFitter {
 
             p.thErrs.clear();
 
-            for(int i = 1; i < thHist118.size(); ++i) {
+            /*
+            for(int i = 0; i < thHist118.size(); ++i) { //from 0?
                 double thNom = thHist118[0][y]->GetBinContent(binId);
                 double diff = (thHist118[i][y]->GetBinContent(binId) - thNom) / thNom;
                 p.thErrs.push_back(diff);
             }
+            */
+
+            for(int i = 0; i < thHist118.size()/2; ++i) { 
+                double thNom = thHist118[0][y]->GetBinContent(binId);
+                double diff = (thHist118[2*i+1][y]->GetBinContent(binId) - thHist118[2*i+2][y]->GetBinContent(binId)) / thNom;
+                p.thErrs.push_back(diff/2);
+            }
+
 
 
         }
@@ -275,6 +326,45 @@ struct asFitter {
             //cout <<"shift " <<  i <<" "<<  s(i) << endl;
         return chi2;
     }
+
+    void printHighest(const TVectorD &s, int n) {
+        //TString sh;
+        map<double, int> shifts;
+        for(int i = 0; i < s.GetNrows(); ++i)
+            shifts[-abs(s(i))] = i;
+        int i = 0;
+        for(auto el : shifts) {
+            if(i < n) {
+                if(el.second < ErrNames.size())
+                    cout << ErrNames[el.second] <<" : "<< s(el.second) << ", ";
+                else
+                    cout << el.second <<" : "<< s(el.second) << ", ";
+            }
+            ++i;
+        }
+        cout << endl;
+    }
+
+
+    double getChi2All()
+    {
+        TVectorD s = getShiftsAll();
+        //s.Print();
+        //printHighest(s, 4);
+        //s.Reset();
+        //for(int i = 0; i < ErrNames.size(); ++i) s[i] = 0;
+
+        double chi2 = getChi2All(s);
+        
+        //print shifts
+        //for(int i = 0; i < data[0].errs.size(); ++i)
+            //cout <<"shift " <<  i <<" "<<  s(i) << endl;
+        return chi2;
+    }
+
+
+
+
 
     //bool Cut(const point &p) { if(p.sigma == 0) return false;  return true;}
 
@@ -311,9 +401,52 @@ struct asFitter {
         return sh;
     }
 
+    //Get the vector with the nuissence parameters, including theor unc. (values which minimize chi2)
+    TVectorD getShiftsAll()
+    {
+        int nErr = data[0].errs.size() + data[0].thErrs.size();
+        TMatrixD mat(nErr, nErr);
+        TVectorD yVec(nErr);
+        //Calculate the optimal shifts
+        for(const auto &p : data) {
+            if(!Cut(p)) continue;
+
+            double th = p.th;
+            double C = pow(p.sigma*p.errStat,2) + pow(p.sigma*p.errUnc,2);
+            for(int j = 0; j < nErr; ++j)
+            for(int k = 0; k < nErr; ++k) {
+                double thJ = (j < p.errs.size()) ? p.errs[j] : p.thErrs[j-p.errs.size()];
+                double thK = (k < p.errs.size()) ? p.errs[k] : p.thErrs[k-p.errs.size()];
+                mat(j,k) += 1./C * th*th * thJ*thK;
+            }
+
+            for(int j = 0; j < nErr; ++j) {
+                double thJ = (j < p.errs.size()) ? p.errs[j] : p.thErrs[j-p.errs.size()];
+                yVec(j) += - 1./C * (p.sigma - th) * th * thJ;
+            }
+
+        }
+
+        for(int j = 0; j < nErr; ++j)
+            mat(j,j) += 1;
+
+        //Solve 
+        TDecompSVD svd(mat);
+        Bool_t ok;
+        const TVectorD sh = svd.Solve(yVec, ok);
+
+        return sh;
+    }
+
+
+
+
+
     //get the chi2 vale, the nuisence vector is as an input
     double getChi2(const TVectorD &s)
     {
+        assert(data[0].errs.size() == s.GetNrows());
+
         //Evaluate the chi2
         double chi2 = 0;
         for(const auto &p : data) {
@@ -334,8 +467,38 @@ struct asFitter {
         return chi2;
     }
 
+    //get the chi2 value, the nuisence vector is as an input, theor unc included
+    double getChi2All(const TVectorD &s)
+    {
+        assert(data[0].errs.size() + data[0].thErrs.size() == s.GetNrows());
+
+        //Evaluate the chi2
+        double chi2 = 0;
+        for(const auto &p : data) {
+            if(!Cut(p)) continue;
+
+            double th = p.th;
+            double corErr = 0;
+            for(int i = 0; i < p.errs.size() + p.thErrs.size(); ++i) {
+                double thI = (i < p.errs.size()) ? p.errs[i] : p.thErrs[i-p.errs.size()];
+                corErr += s(i) * thI;
+            }
+
+            double C = pow(p.sigma*p.errStat,2) + pow(p.sigma*p.errUnc,2);
+            chi2 += pow(p.sigma - th * (1 - corErr), 2) / C;
+        }
+
+        for(int j = 0; j < data[0].errs.size() + data[0].thErrs.size(); ++j)
+            chi2 += pow(s(j),2);
+
+        return chi2;
+    }
+
+
+
+
     //Get chi2 based on covariance matrix
-    double getChi2cov()
+    double getChi2cov(vector<int> indx)
     {
         //Filter data
         vector<point> dataF;
@@ -354,11 +517,12 @@ struct asFitter {
 
         //Fill data sys matrix
         TMatrixD CovSys(dataF.size(), dataF.size());
-        for(int k = 0; k < dataF[0].errs.size(); ++k) {
+        //for(int k = 0; k < dataF[0].errs.size(); ++k) {
+        for(int k : indx) {
             for(int i = 0; i < dataF.size(); ++i) 
             for(int j = 0; j < dataF.size(); ++j) {
-                //if(dataF[i].yMin != dataF[j].yMin)// && k <= 15)
-                 //   continue;
+                //if(dataF[i].yMin != dataF[j].yMin)// && k <= 15) continue;
+                //if(i != j) continue;
                 CovSys(i,j) += dataF[i].errs[k]*dataF[j].errs[k]  *  dataF[i].sigma * dataF[j].sigma;
             }
         }
@@ -366,17 +530,22 @@ struct asFitter {
         //Fill pdf sys matrix
 
         double Ccorr = 1;
-        if(dataF[0].thErrs.size() == 57) //CT14
-            Ccorr = 1*1./(2*1.64*1.64);
+        if(dataF[0].thErrs.size() == 28) //CT14
+            Ccorr = 1*1./(1.64*1.64);
         else if(dataF[0].thErrs.size() == 29) //HERAPDF
             Ccorr = 1*1./(2);
         else if(dataF[0].thErrs.size() == 101) //NNPDF31
             Ccorr = 1*1./(2);
+        else {
+            cout << "pdf err size " << dataF[0].thErrs.size()  << endl;
+            assert(0);
+        }
 
         TMatrixD CovPDF(dataF.size(), dataF.size());
         for(int k = 0; k < dataF[0].thErrs.size(); ++k) {
             for(int i = 0; i < dataF.size(); ++i) 
             for(int j = 0; j < dataF.size(); ++j) {
+                //if(dataF[i].yMin != dataF[j].yMin) continue;
                 CovPDF(i,j) += dataF[i].thErrs[k]*dataF[j].thErrs[k]  *  dataF[i].sigma * dataF[j].sigma * Ccorr;
             }
         }
@@ -470,43 +639,70 @@ struct asFitter {
 
         fillTheory(pdfName, as, scale);
 
-        return getChi2cov();
+        return getChi2All();
+        vector<int> indx;
+        for(int i = 0; i < data[0].errs.size(); ++i) {
+            if(i != -1) indx.push_back(i); //remove luminosity
+        }
+        return getChi2cov(indx);
+        //return getChi2();
     }
+
+
+    void ScanChi2(TString pdfName, int scale = 0) {
+
+        for(auto as: pdfAsVals.at(pdfName)) {
+            fillTheory(pdfName, as, scale);
+
+            for(int i = 0; i < data[0].errs.size(); ++i) {
+                vector<int> indx;
+                indx.push_back(i);
+                double chi2 =  getChi2cov(indx);
+                cout << as <<" "<< i <<" "<< chi2 << endl;
+            }
+        }
+        //return getChi2();
+    }
+
+
 
 
     //print the chi2 table
     void printChi2Table()
     {
-        vector<TString> pdfSets = {"CT14nlo", "HERAPDF20_NLO", "NNPDF31_nnlo"};
+        vector<TString> pdfSets = {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo"};
 
         for(auto p : pdfSets)
-            cout << p << " ";
+            cout << p << " & ";
         cout << endl;
 
         for(int y = 0; y < 4; ++y) { //over rapidities
-            cout << y*0.5 <<" " << (y+1)*0.5 << " ";
+            cout << y*0.5 <<" & " << (y+1)*0.5 << " & ";
             Cut = [y](point p) { return ( abs(y*0.5-p.yMin) < 0.1 &&  p.sigma != 0);};
             int ndf = getNpoints();
 
+            cout << ndf << " & ";
             for(auto pdfSet : pdfSets) {
                 double chi2now = calcChi2(pdfSet, 0.118);
-                cout  <<chi2now << " / " << ndf << " " ;
+                //cout  <<chi2now << " / " << ndf << " " ;
+                cout  <<chi2now << " & ";
             }
-            cout << endl;
+            cout << "//" << endl;
 
         }
 
         
         { //Total chi2 
-            cout << "Total ";
+            cout << "Total &&";
             Cut = [](point p) { return ( abs(p.yMin) < 1.6 &&  p.sigma != 0);};
             int ndf = getNpoints();
 
+            cout << ndf << " & ";
             for(auto pdfSet : pdfSets) {
                 double chi2now = calcChi2(pdfSet, 0.118);
-                cout  <<chi2now << " / " << ndf << " " ;
+                cout  <<chi2now <<  " & " ;
             }
-            cout << endl;
+            cout << "//" <<  endl;
 
         }
 
@@ -649,6 +845,16 @@ struct asFitter {
 
     }
 
+			
+    //
+    void TheoryPlotter()
+    {	
+
+
+
+    }
+
+
 
 };
 
@@ -656,39 +862,55 @@ struct asFitter {
 
 
 
+
+
+
+
 int main(int argc, char** argv)
 {
-    fTh  = TFile::Open("cmsJetsAsScan.root");  //NLO predictions
+    fTh  = TFile::Open("cmsJetsAsScan_ak4.root");  //NLO predictions
 
 	asFitter asfit;
-    asfit.data = asfit.readData("xFitterTables/data16.txt");
-    asfit.readAllTheory("CT14nlo");
-    asfit.readAllTheory("HERAPDF20_NLO");
-    asfit.readAllTheory("NNPDF31_nnlo");
+    asfit.data = asfit.readData("xFitterTables/patrick16ak4.txt");
+    //asfit.readAllTheory("CT14nnlo");
+    //asfit.readSingleTheory("HERAPDF20_NNLO");
+
+    TString curPDF = "NNPDF31_nnlo";
+
+    asfit.readAllTheory(curPDF);
+    //asfit.readSingleTheory("ABMP16_5_nnlo");
+    //asfit.readSingleTheory("MMHT2014nnlo68cl");
+
+    //asfit.printChi2Table();
+
+    //return 0;
+    //asfit.getAllChi2s();
+    //return 0;
+
+    //asfit.Cut = [](point p) { return ( abs(p.yMin) < 1.7 &&  p.sigma != 0 && p.ptMin > 96);};
+    //asfit.ScanChi2("CT14nnlo");
+    //return 0;
 
 
-    asfit.printChi2Table();
-
-    return 0;
-    asfit.getAllChi2s();
-    return 0;
-
-    asfit.Cut = [](point p) { return ( abs(p.yMin) < 1.7 &&  p.sigma != 0);};
-    for(auto as: pdfAsVals.at("CT14nlo")) {
-        cout << "Helenka " << as <<" "<<  asfit.calcChi2("CT14nlo", as, 0) <<" : "<< asfit.getNpoints() << endl;
+    cout << "Reading finished " << endl;
+    asfit.Cut = [](point p) { return ( abs(p.yMin) < 1.7 &&  p.sigma != 0 && p.ptMin > 96);};
+    for(auto as: pdfAsVals.at(curPDF)) {
+        //if(round(1000*as) != 118) continue;
+        double chi2 = asfit.calcChi2(curPDF, as, 0);
+        cout << "Helenka " << as <<" "<< chi2  <<" : "<< asfit.getNpoints() << endl;
     }
 
-    return 0;
+    //return 0;
 
-    for(int y = 0; y < 1; ++y) {
-        asfit.Cut = [y](point p) { return ( abs(y*0.5-p.yMin) < 0.1 &&  p.sigma != 0);};
-        for(auto as: pdfAsVals.at("CT14nlo")) {
-            cout << "Helenka " << y <<" "<<as <<" "<<  asfit.calcChi2("CT14nlo", as, 0) <<" : "<< asfit.getNpoints() << endl;
+
+    for(int y = 0; y < 4; ++y) {
+        asfit.Cut = [y](point p) { return ( abs(y*0.5-p.yMin) < 0.1 &&  p.sigma != 0 && p.ptMin > 96);};
+        for(auto as: pdfAsVals.at(curPDF)) {
+            //if(round(1000*as) != 118) continue;
+            double chi2 = asfit.calcChi2(curPDF, as, 0);
+            cout << "Helenka " << y <<" "<<as <<" "<<  chi2  <<" : "<< asfit.getNpoints() << endl;
         }
     }
-
-
-
 
     return 0;
 

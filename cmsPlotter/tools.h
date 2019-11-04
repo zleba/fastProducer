@@ -59,12 +59,16 @@ inline void applyNPEW(TH1D *h, int y,  TString Tag)
 
     int year = Tag.Contains("15") ? 15 : 16;
 
+    assert(Tag.Contains("ak4") || Tag.Contains("ak7"));
     int R = Tag.Contains("ak4") ? 4 : 7;
+
     TH1D *hEW = dynamic_cast<TH1D*>( fNPEW->Get(Form("ew%d_ak%d_y%d", year, R, y)));
     assert(hEW);
 
-    TH1D *hNP;
+    TH1D *hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak%d_y%d", year, R, y)));
+    assert(hNP);
     
+    /*
     if(Tag.Contains("ak4")) {
         hNP = dynamic_cast<TH1D*>( fNPEW->Get(Form("np%d_ak4_y%d", year, y)));
         assert(hNP);
@@ -76,6 +80,7 @@ inline void applyNPEW(TH1D *h, int y,  TString Tag)
         hNP = dynamic_cast<TH1D*>( fNP->Get(Form("NPCorrection_Xsection_AK7_Eta%d", y+1 )));
         assert(hNP);
     }
+    */
 
     if(!hEW || !hNP) {
         std::cout << "Histogram is missing in np_ew.root file" << std::endl;

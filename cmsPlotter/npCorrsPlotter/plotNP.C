@@ -7,6 +7,7 @@ R__LOAD_LIBRARY($PlH_DIR/plottingHelper_C.so)
 
 #include "plottingHelper.h"
 #include "RemoveOverlaps.h"
+#include <fstream>
 
 using namespace PlottingHelper;//pollute the namespace!
 
@@ -61,8 +62,9 @@ TObject *getSafe (TFile *f, TString str)
     //return obj;
 }
 
-TGraphAsymmErrors *getEnvelope (vector<TH1D*> hs)
+pair<TGraphAsymmErrors*, TH1D*> getEnvelope (vector<TH1D*> hs)
 {
+    TH1D *hCnt = (TH1D*) hs[0]->Clone(rn());
     TGraphAsymmErrors *gr = new TGraphAsymmErrors(hs[0]->GetNbinsX());
     for(int i = 1; i <= hs[0]->GetNbinsX(); ++i) {
 
@@ -76,23 +78,23 @@ TGraphAsymmErrors *getEnvelope (vector<TH1D*> hs)
         double yerr = (Max - Min)/2;
         double x    = hs[0]->GetBinCenter(i);
         double xerr = hs[0]->GetBinWidth(i)/2;
-        gr->SetPoint(i, x, y);
-        gr->SetPointError(i, xerr, xerr, yerr, yerr);
-
+        gr->SetPoint(i-1, x, y);
+        gr->SetPointError(i-1, xerr, xerr, yerr, yerr);
+        hCnt->SetBinContent(i, y);
+        hCnt->SetBinError(i, 1e-8);
     }
-    return gr;
+    return make_pair(gr, hCnt);
 }
 
 
-void printEnvelope(vector<vector<TH1D*>> hs)
+void printEnvelope(vector<vector<TH1D*>> hs, TString fName)
 {
-
     vector<int> bins = {56  , 74  , 97  , 133 , 174 , 220 , 272 , 330 , 395 , 468 , 548 , 638 , 737 , 846 , 967 , 1101, 1248, 1410, 1588, 1784, 2000, 2238, 2500, 2787, 3103, 3450, 3832,};
     vector<int> edges= {3832, 3450, 3103, 2238, 2000};
 
+    ofstream outFile(fName);
 
     for(int iy = 0; iy < hs[0].size(); ++iy) {
-
         for(int ipt = 0; ipt < bins.size()-1; ++ipt) {
             int pt1 = bins[ipt];
             int pt2 = bins[ipt+1];
@@ -116,33 +118,13 @@ void printEnvelope(vector<vector<TH1D*>> hs)
             double corrErr = (Max - Min)/2;
 
             if(Max == -1e10 || Min == 1e10) {corr = 1; corrErr = 0; }
-            cout << iy*0.5 <<" "<< (iy+1)*0.5 <<" "<< pt1 <<" "<< pt2 << " "<<  corr <<" "<< corrErr << endl;
-
+            //cout << iy*0.5 <<" "<< (iy+1)*0.5 <<" "<< pt1 <<" "<< pt2 << " "<<  corr <<" "<< corrErr << " : " << Min <<" "<< Max << endl;
+            double relUnc = (corr != 0) ? corrErr / corr * 100 : 0;
+            outFile << setw(10) << iy*0.5 <<" "<< setw(10) << (iy+1)*0.5 <<" "<<setw(10)<< pt1 <<" "<<setw(10)<< pt2 << " "<<setw(12)<<  corr <<" "<<setw(12)<< relUnc << " "<<setw(12)<< -relUnc << endl;
         }
 
-        /*
-        for(int i = 1; i <= hs[0][0]->GetNbinsX(); ++i) {
-
-            double Max = -1e10, Min = 1e10;
-            for(int n = 0; n < hs.size(); ++n) {
-                auto &h = hs[n][iy];
-                Max = max(Max, h->GetBinContent(i) + h->GetBinError(i));
-                Min = min(Min, h->GetBinContent(i) - h->GetBinError(i));
-            }
-
-            double corr    = (Max + Min)/2;
-            double corrErr = (Max - Min)/2;
-            double ptL   = hs[0][0]->GetXaxis()->GetBinLowEdge(i);
-            double ptH   = hs[0][0]->GetXaxis()->GetBinUpEdge(i);
-            double ptErr = hs[0][0]->GetBinWidth(i)/2;
-            //gr->SetPoint(i, x, y);
-            //gr->SetPointError(i, xerr, xerr, yerr, yerr);
-
-            //cout << x <<" "<< y << " "<< yerr << endl;
-            cout << iy*0.5 <<" "<< (iy+1)*0.5 <<" "<< ptL <<" "<< ptH << " "<< corr <<" "<< corrErr << endl;
-        }
-        */
     }
+    outFile.close();
 }
 
 
@@ -241,12 +223,17 @@ struct plotter {
             hNP[0][y]->Draw("axis");
 
 
-            //TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y],hNP[2][y],hNP[3][y]} );
-            TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y], hNP[2][y], hNP[3][y], hNP[4][y]}  );
+            TH1D *hCnt;
+            TGraphAsymmErrors *gr;
+            tie(gr,hCnt)= getEnvelope({hNP[0][y],hNP[1][y],hNP[2][y],hNP[3][y]} );
+            //TGraphAsymmErrors *gr = getEnvelope({hNP[0][y],hNP[1][y], hNP[2][y], hNP[3][y], hNP[4][y]}  );
             gr->SetFillStyle(1001);
             gr->SetFillColor(kOrange);
-            gr->SetLineColor(kOrange);
+            gr->SetLineColor(kOrange+2);
             gr->Draw("2 same");
+            hCnt->SetLineColor(kOrange+2);
+            hCnt->SetMarkerColor(kOrange+2);
+            hCnt->Draw("same");
 
 
             vector<int> Cols = {kBlue, kMagenta, kGreen+2, kCyan+2};
@@ -289,7 +276,7 @@ struct plotter {
 
 
             if(y == 0) GetYaxis()->SetTitle("Non-perturbative correction factor");
-            if(y == 3) GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+            if(y == 4) GetXaxis()->SetTitle("Jet p_{T} (GeV)");
 
 
             SetFTO({22}, {9}, {1.5, 2.6, 0.5, 3.7});
@@ -328,7 +315,8 @@ struct plotter {
                 auto leg = newLegend(kPos7);
                 leg->SetTextSize(PxFontToRel(20));
                 leg->AddEntry((TObject*)0, "", "h");
-                leg->AddEntry(gr, "unc. envelope", "f");
+                leg->AddEntry(gr, "unc. envelope", "fl");
+                leg->AddEntry((TObject*)0, "+central val.", "");
                 DrawLegends({leg}, true);
             }
 
@@ -357,10 +345,12 @@ void plotNP ()
     plotter pl;
     pl.loadData();
 
-    printEnvelope(pl.NPak7);
+    //printEnvelope( {pl.NPak7[0],pl.NPak7[1],pl.NPak7[2],pl.NPak7[3]}, "np16_ak7.txt");
+    //printEnvelope( {pl.NPak4[0],pl.NPak4[1],pl.NPak4[2],pl.NPak4[3]}, "np16_ak4.txt");
+    //printEnvelope(pl.NPak4, "np16_ak4.txt");
 
-    //pl.plotNP(7);
-    //pl.plotNP(4);
+    pl.plotNP(7);
+    pl.plotNP(4);
 
 
 
