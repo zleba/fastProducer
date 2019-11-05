@@ -194,25 +194,25 @@ struct asFitter {
     static vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s)
     {
 
+        int asI = round(as*1000);
         //Size of the histogram depends on the as value and #pdf for given pdf set
         
         vector<vector<TH1D*>> vTh; //indexes - [pdfVar][y]
         vTh.resize(1);
-        if(pdfName.Contains("CT14")  && abs(as - 0.118) < 1e-6)
+        if(pdfName.Contains("CT14")  && asI == 118)
             vTh.resize(56+1);
-        else if(pdfName.Contains("HERAPDF")  && abs(as - 0.118) < 1e-6)
+        else if(pdfName.Contains("HERAPDF")  && asI == 118)
             vTh.resize(28+1);
-        else if(pdfName.Contains("NNPDF31")  && abs(as - 0.118) < 1e-6)
+        else if(pdfName.Contains("NNPDF31")  && asI == 118)
             vTh.resize(100+1);
-        else if(pdfName.Contains("ABMP16_5")  && abs(as - 0.118) < 1e-6)
+        else if(pdfName.Contains("ABMP16_5")  && asI == 118)
             vTh.resize(30);
-        else if(pdfName.Contains("MMHT2014nnlo68cl")  && abs(as - 0.118) < 1e-6)
+        else if(pdfName.Contains("MMHT2014nnlo68cl")  && asI == 118)
             vTh.resize(50+1);
 
         int idCnt = 0;
         for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
             for(int y = 0; y < 5; ++y) {
-                int asI = round(as*1000);
                 TH1D *hTmp = (TH1D*) fTh->Get(pdfName+ Form("_y%d_as0%d_scale%d_pdf%d",y,asI, s, ipdf) );
                 cout << pdfName+ Form("_y%d_as0%d_scale%d_pdf%d",y,asI, s, ipdf)  << endl;
                 assert(hTmp);
@@ -292,7 +292,11 @@ struct asFitter {
             for(int i = 0; i < thHist118.size()/2; ++i) { 
                 double thNom = thHist118[0][y]->GetBinContent(binId);
                 double diff = (thHist118[2*i+1][y]->GetBinContent(binId) - thHist118[2*i+2][y]->GetBinContent(binId)) / thNom;
-                p.thErrs.push_back(diff/2);
+
+                if(pdfName.Contains("CT14")) //CT14
+                    p.thErrs.push_back(diff/2 * 1./1.645);
+                else
+                    p.thErrs.push_back(diff/2);
             }
 
 
@@ -379,14 +383,15 @@ struct asFitter {
         for(const auto &p : data) {
             if(!Cut(p)) continue;
 
-            double th = p.th;
+            double ref = p.sigma;
+            double th  = p.th;
             double C = pow(p.sigma*p.errStat,2) + pow(p.sigma*p.errUnc,2);
             for(int j = 0; j < p.errs.size(); ++j)
                 for(int k = 0; k < p.errs.size(); ++k)
-                    mat(j,k) += 1./C * th*th * p.errs[j]*p.errs[k];
+                    mat(j,k) += 1./C * ref*ref * p.errs[j]*p.errs[k];
 
             for(int j = 0; j < p.errs.size(); ++j)
-                yVec(j) += - 1./C * (p.sigma - th) * th * p.errs[j];
+                yVec(j) += - 1./C * (p.sigma - th) * ref * p.errs[j];
 
         }
 
@@ -411,18 +416,19 @@ struct asFitter {
         for(const auto &p : data) {
             if(!Cut(p)) continue;
 
-            double th = p.th;
+            double th  = p.th;
+            double ref = p.sigma;
             double C = pow(p.sigma*p.errStat,2) + pow(p.sigma*p.errUnc,2);
             for(int j = 0; j < nErr; ++j)
             for(int k = 0; k < nErr; ++k) {
                 double thJ = (j < p.errs.size()) ? p.errs[j] : p.thErrs[j-p.errs.size()];
                 double thK = (k < p.errs.size()) ? p.errs[k] : p.thErrs[k-p.errs.size()];
-                mat(j,k) += 1./C * th*th * thJ*thK;
+                mat(j,k) += 1./C * ref*ref * thJ*thK;
             }
 
             for(int j = 0; j < nErr; ++j) {
                 double thJ = (j < p.errs.size()) ? p.errs[j] : p.thErrs[j-p.errs.size()];
-                yVec(j) += - 1./C * (p.sigma - th) * th * thJ;
+                yVec(j) += - 1./C * (p.sigma - th) * ref * thJ;
             }
 
         }
@@ -437,6 +443,49 @@ struct asFitter {
 
         return sh;
     }
+
+    // HERA chi2 fit with theory unc
+    // http://www-h1.desy.de/psfiles/papers/desy15-039.pdf
+    TVectorD getShiftsHERAall()
+    {
+        int nErr = data[0].errs.size() + data[0].thErrs.size();
+        TMatrixD mat(nErr, nErr);
+        TVectorD yVec(nErr);
+        //Calculate the optimal shifts
+        for(const auto &p : data) {
+            if(!Cut(p)) continue;
+
+            double m  = p.th;
+            double mu = p.sigma;
+            double C =  m*mu*pow(p.errStat,2) + m*m*pow(p.errUnc,2);
+            for(int j = 0; j < nErr; ++j)
+            for(int k = 0; k < nErr; ++k) {
+                double thJ = (j < p.errs.size()) ? p.errs[j] : p.thErrs[j-p.errs.size()];
+                double thK = (k < p.errs.size()) ? p.errs[k] : p.thErrs[k-p.errs.size()];
+                mat(j,k) += 1./C * m*m * thJ*thK;
+            }
+
+            for(int j = 0; j < nErr; ++j) {
+                double thJ = (j < p.errs.size()) ? p.errs[j] : p.thErrs[j-p.errs.size()];
+                yVec(j) += - 1./C * (p.sigma - m) * m * thJ;
+            }
+
+        }
+
+        for(int j = 0; j < nErr; ++j)
+            mat(j,j) += 1;
+
+        //Solve 
+        TDecompSVD svd(mat);
+        Bool_t ok;
+        const TVectorD sh = svd.Solve(yVec, ok);
+
+        return sh;
+    }
+
+
+
+
 
 
 
@@ -458,7 +507,7 @@ struct asFitter {
                 corErr += s(i) * p.errs[i];
 
             double C = pow(p.sigma*p.errStat,2) + pow(p.sigma*p.errUnc,2);
-            chi2 += pow(p.sigma - th * (1 - corErr), 2) / C;
+            chi2 += pow(p.sigma - th + p.sigma*corErr, 2) / C;
         }
 
         for(int j = 0; j < data[0].errs.size(); ++j)
@@ -477,7 +526,8 @@ struct asFitter {
         for(const auto &p : data) {
             if(!Cut(p)) continue;
 
-            double th = p.th;
+            double th  = p.th;
+            double ref = p.sigma;
             double corErr = 0;
             for(int i = 0; i < p.errs.size() + p.thErrs.size(); ++i) {
                 double thI = (i < p.errs.size()) ? p.errs[i] : p.thErrs[i-p.errs.size()];
@@ -485,7 +535,7 @@ struct asFitter {
             }
 
             double C = pow(p.sigma*p.errStat,2) + pow(p.sigma*p.errUnc,2);
-            chi2 += pow(p.sigma - th * (1 - corErr), 2) / C;
+            chi2 += pow(p.sigma - th  + corErr*ref, 2) / C;
         }
 
         for(int j = 0; j < data[0].errs.size() + data[0].thErrs.size(); ++j)
@@ -493,6 +543,43 @@ struct asFitter {
 
         return chi2;
     }
+
+
+    //get the chi2 value, the nuisence vector is as an input, theor unc included
+    //Hera furmula http://www-h1.desy.de/psfiles/papers/desy15-039.pdf
+    double getChi2HERAall(const TVectorD &s)
+    {
+        assert(data[0].errs.size() + data[0].thErrs.size() == s.GetNrows());
+
+        //Evaluate the chi2
+        double chi2 = 0;
+        for(const auto &p : data) {
+            if(!Cut(p)) continue;
+
+            double m   = p.th;
+            double mu  = p.sigma;
+            //double th  = p.th;
+            //double ref = p.sigma;
+            double corErr = 0;
+            for(int i = 0; i < p.errs.size() + p.thErrs.size(); ++i) {
+                double thI = (i < p.errs.size()) ? p.errs[i] : p.thErrs[i-p.errs.size()];
+                corErr += s(i) * thI;
+            }
+
+            double C = m*mu*pow(p.errStat,2) + m*m*pow(p.errUnc,2);
+            //chi2 += pow(mu - m  + corErr*m, 2) / C;
+            chi2 += pow(m   - corErr*m  - mu, 2) / C;
+
+            chi2 += log(C / ((pow(p.errStat,2)+pow(p.errUnc,2))*mu*mu));
+        }
+
+        for(int j = 0; j < data[0].errs.size() + data[0].thErrs.size(); ++j)
+            chi2 += pow(s(j),2);
+
+        return chi2;
+    }
+
+
 
 
 
@@ -530,6 +617,7 @@ struct asFitter {
         //Fill pdf sys matrix
 
         double Ccorr = 1;
+        /*
         if(dataF[0].thErrs.size() == 28) //CT14
             Ccorr = 1*1./(1.64*1.64);
         else if(dataF[0].thErrs.size() == 29) //HERAPDF
@@ -540,6 +628,7 @@ struct asFitter {
             cout << "pdf err size " << dataF[0].thErrs.size()  << endl;
             assert(0);
         }
+        */
 
         TMatrixD CovPDF(dataF.size(), dataF.size());
         for(int k = 0; k < dataF[0].thErrs.size(); ++k) {
@@ -550,9 +639,9 @@ struct asFitter {
             }
         }
 
+        //TMatrixD Cov = CovStat + CovSys;// +  CovPDF;// + CovSys + CovPDF;
         TMatrixD Cov = CovStat + CovSys +  CovPDF;// + CovSys + CovPDF;
 
-        double chi2 = 0;
         
         //Fill data - th
         TVectorD diff(dataF.size());
@@ -567,6 +656,7 @@ struct asFitter {
         CovInv.Invert();
         TVectorD diffM = CovInv*diff;
 
+        double chi2 = 0;
         for(int i = 0; i < dataF.size(); ++i)
             chi2 += diff(i) * diffM(i);
 
@@ -639,12 +729,19 @@ struct asFitter {
 
         fillTheory(pdfName, as, scale);
 
-        return getChi2All();
+        double chi2N = getChi2All();
+
+        auto shifts  = getShiftsHERAall();
+        double chi2H = getChi2HERAall(shifts);
+
+
         vector<int> indx;
         for(int i = 0; i < data[0].errs.size(); ++i) {
             if(i != -1) indx.push_back(i); //remove luminosity
         }
-        return getChi2cov(indx);
+        double chi2C = getChi2cov(indx);
+        cout <<"chi2 "<< chi2N <<" "<< chi2C << " "<< chi2H << endl; 
+        return chi2C;
         //return getChi2();
     }
 
@@ -854,9 +951,148 @@ struct asFitter {
 
     }
 
+    void plotReview(TString pdfName, double as, int scale = 0)
+    {
+        gStyle->SetOptStat(0);
+        fillTheory(pdfName, as, scale);
 
+        auto shifts  = getShiftsHERAall();
+        double chi2H = getChi2HERAall(shifts);
+
+
+        //Shifts to histogram
+        TH1D *hShifts = new TH1D(rn(), "", shifts.GetNrows(), 0.5, shifts.GetNrows()+0.5);
+        for(int i = 0; i < shifts.GetNrows(); ++i) {
+            hShifts->SetBinContent(i+1, shifts[i]);
+            hShifts->SetBinError(i+1, 1);
+        }
+
+
+
+        const int nYbins = 4;
+
+        //Get binning of the data
+        vector<vector<double>> bins(nYbins);
+        for(auto p : data) {
+            int y = round(p.yMin*2);
+            if(y >= nYbins) continue;
+            bins[y].push_back(p.ptMin);
+            bins[y].push_back(p.ptMax);
+        }
+        for(auto &bin : bins) {
+            sort(bin.begin(), bin.end());
+            auto it = unique(bin.begin(), bin.end());
+            bin.resize(distance(bin.begin(), it));
+        }
+
+        vector<TH1D*> hData(nYbins);
+        vector<TH1D*> hTh(nYbins);
+        vector<TH1D*> hThSh(nYbins);
+
+        for(int y = 0; y < nYbins; ++y) {
+           hData[y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+           hTh[y]   = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+           hThSh[y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+        }
+
+
+        //Fill theory and data
+        for(auto p : data) {
+            int y = round(p.yMin*2);
+            if(y >= nYbins) continue;
+            int ipt = hData[y]->FindBin((p.ptMin+p.ptMax)/2);
+            hData[y]->SetBinContent(ipt, p.sigma);
+            hData[y]->SetBinError(ipt, hypot(p.errStat,p.errUnc)*p.sigma);
+            hTh[y]->SetBinContent(ipt, p.th);
+            hTh[y]->SetBinError(ipt, 0);
+
+
+            //Fill shifted theory
+            double shTot = 0;
+            for(int i = 0; i < p.errs.size(); ++i)
+                shTot += p.errs[i]*shifts[i]*p.th;
+                
+            for(int i = 0; i < p.thErrs.size(); ++i)
+                shTot += p.thErrs[i]*shifts[p.errs.size()+i]*p.th;
+            hThSh[y]->SetBinContent(ipt, p.th-shTot);
+            hThSh[y]->SetBinError(ipt, 0);
+
+        }
+        
+
+
+        TCanvas *can = new TCanvas(rn(), "", 1000, 700);
+        DividePad({1}, {1,1,1});
+
+        //Ratio to theory
+        can->cd(1);
+        DividePad(vector<double>(nYbins,1.), {1});
+        for(int y = 0; y < nYbins; ++y) {
+            can->cd(1)->cd(y+1);
+            gPad->SetLogx();
+            auto hDataR = (TH1D*) hData[y]->Clone(rn());
+            auto hThShR = (TH1D*) hThSh[y]->Clone(rn());
+            auto hThR   = (TH1D*) hTh[y]->Clone(rn());
+            hDataR->Divide(hTh[y]);
+            hThShR->Divide(hTh[y]);
+            hThR->Divide(hTh[y]);
+
+            hDataR->SetLineColor(kBlack);
+            hThShR->SetLineColor(kBlue);
+            hThR->SetLineColor(kRed);
+
+            hThR->Draw();
+            hThShR->Draw("same");
+            hDataR->Draw("same");
+            GetYaxis()->SetRangeUser(0.6,1.5);
+        }
+
+        //Ratio to shifted theory
+        can->cd(2);
+        DividePad(vector<double>(nYbins,1.), {1});
+        for(int y = 0; y < nYbins; ++y) {
+            can->cd(2)->cd(y+1);
+            gPad->SetLogx();
+            auto hDataR = (TH1D*) hData[y]->Clone(rn());
+            auto hThShR = (TH1D*) hThSh[y]->Clone(rn());
+            hDataR->Divide(hThSh[y]);
+            hThShR->Divide(hThSh[y]);
+
+            hDataR->SetLineColor(kBlack);
+            hThShR->SetLineColor(kRed);
+            hThShR->Draw();
+            hDataR->Draw("same");
+            GetYaxis()->SetRangeUser(0.9,1.1);
+        }
+
+        //Shifts
+        can->cd(3);
+
+        int nSys = data[0].errs.size();
+        int nTh  = data[0].thErrs.size();
+        double chiSys = 0, chiTh = 0;
+        for(int i = 0; i < nSys; ++i)
+            chiSys += pow(shifts[i],2);
+        for(int i = 0; i < nTh; ++i)
+            chiTh  += pow(shifts[nSys+i],2);
+
+        hShifts->Draw();
+        TLine *l = new TLine;
+        l->DrawLine(nSys-0.5, -4, nSys-0.5, 4);
+        DrawLatexUp(-1, Form("    Data: #chi^{2} = %.1f / %d", chiSys, nSys), -1, "l");
+        DrawLatexUp(-1, Form("PDF: #chi^{2} = %.1f / %d   ", chiTh, nTh), -1, "r");
+
+
+        can->SaveAs("rew.pdf");
+
+
+    }
 
 };
+
+
+
+
 
 
 
@@ -875,7 +1111,8 @@ int main(int argc, char** argv)
     //asfit.readAllTheory("CT14nnlo");
     //asfit.readSingleTheory("HERAPDF20_NNLO");
 
-    TString curPDF = "NNPDF31_nnlo";
+    //TString curPDF = "NNPDF31_nnlo";
+    TString curPDF = "CT14nnlo";
 
     asfit.readAllTheory(curPDF);
     //asfit.readSingleTheory("ABMP16_5_nnlo");
@@ -894,6 +1131,11 @@ int main(int argc, char** argv)
 
     cout << "Reading finished " << endl;
     asfit.Cut = [](point p) { return ( abs(p.yMin) < 1.7 &&  p.sigma != 0 && p.ptMin > 96);};
+
+
+    asfit.plotReview(curPDF, 0.118, 0);
+    return 0;
+
     for(auto as: pdfAsVals.at(curPDF)) {
         //if(round(1000*as) != 118) continue;
         double chi2 = asfit.calcChi2(curPDF, as, 0);
