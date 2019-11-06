@@ -12,9 +12,6 @@ TString rn() {return Form("%d",rand());}
 TString year = "16";
 
 
-vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1.0",  "1.0 < |y| < 1.5", "1.5 < |y| < 2.0", "2.0 < |y| < 2.5"};
-
-
 TH1D *rebin(TH1D *h, TH1D *hTemp); //second is template to rebin to
 void removeEmpty(TH1D *h, TH1D *hTemp); //remove h where hTemp is empyt
 TGraphAsymmErrors *getBandTot(TH1D *hNom, vector<TH1D*> hSh); //getBand from histos
@@ -660,7 +657,7 @@ static void Reset(TH1D *h, TH1D *hTemp)
     assert(h->GetNbinsX() == hTemp->GetNbinsX());
     for(int i = 1; i <= hTemp->GetNbinsX(); ++i)
         if(hTemp->GetBinContent(i) < 1e-10) {
-            h->SetBinContent(i, 0);
+            h->SetBinContent(i, -1e10);
             h->SetBinError(i, 0);
         }
 }
@@ -668,6 +665,7 @@ static void Reset(TH1D *h, TH1D *hTemp)
 //Plot canvas with binning in y instead of pt
 void plotRatioY(TString Tag, TString pdf)
 {
+    bool doRatio = false;
     TFile *fTh;
     
     if(Tag.Contains("16ak7"))
@@ -726,10 +724,12 @@ void plotRatioY(TString Tag, TString pdf)
         }
 
 
-        hStat->Divide(hTh); //normalize to theory
-        hThNLL->Divide(hTh);
-        hThNNLO->Divide(hTh);
-        hTh->Divide(hTh);
+        if(doRatio) {
+            hStat->Divide(hTh); //normalize to theory
+            hThNLL->Divide(hTh);
+            hThNNLO->Divide(hTh);
+            hTh->Divide(hTh);
+        }
 
 
         hStatPt[y] = hStat;
@@ -763,9 +763,10 @@ void plotRatioY(TString Tag, TString pdf)
         Reset(hThNLL, hStat);
         Reset(hThNNLO, hStat);
         Reset(hTh, hStat);
+        Reset(hStat, hStat);
 
-        gPad->DrawFrame(0, 0.3, 2.5, 1.4);
-        //gPad->DrawFrame(0, 0.0, 2.5, 1.3*hStat->GetMaximum());
+        if(doRatio) gPad->DrawFrame(0, 0.3, 2.5, 1.4);
+        else        gPad->DrawFrame(0, 0.0, 2.5, 1.5*hStat->GetMaximum());
 
 
 
@@ -788,16 +789,39 @@ void plotRatioY(TString Tag, TString pdf)
         hStat->Draw("e0  same");
 
 
-        SetFTO({10}, {5}, {1.15, 2.1, 0.3, 2.73});
+        SetFTO({9}, {4}, {1.25, 2.1, 0.3, 2.73});
 
+        if(i == 22) GetXaxis()->SetTitle("|y|");
 
         int ptLow = round(hStat2D->GetXaxis()->GetBinLowEdge(i+3));
         int ptHi  = round(hStat2D->GetXaxis()->GetBinUpEdge(i+3));
-        DrawLatexUp(-1, Form("%d < p_{T} < %d", ptLow, ptHi));
+        DrawLatexUp(-1.2, Form("%d < p_{T} < %d", ptLow, ptHi));
         //GetYaxis()->SetRangeUser(0.7, 1.5);
         //GetXaxis()->SetRangeUser(0, 2.5);
 
+        RemoveOverlaps(gPad, GetXaxis());
+        RemoveOverlaps(gPad, GetYaxis());
+
+        if(i == 22) {
+            auto leg = newLegend(kPos7);
+            leg->SetTextSize(PxFontToRel(7));
+            leg->AddEntry((TObject*)0, "", "");   
+            leg->AddEntry((TObject*)0, "", "");   
+
+            double R = !Tag.Contains("16ak7") ? 0.4 : 0.7;
+
+            leg->AddEntry((TObject*)nullptr, Form("Incl. jets R = %g", R), "");//    leg->AddEntry(hTh[0],  nloRem(pdfs[0]), "l");
+
+
+            leg->AddEntry(hStat, "Data + (stat unc.)", "pe");   
+            leg->AddEntry(hTh,  "NLO", "l");
+            leg->AddEntry(hThNLL,  "NLO+NLL", "l");
+            leg->AddEntry(hThNNLO, "NNLO", "l");
+            DrawLegends({leg}, true);
+        }
+
     }
+    can->SaveAs("xsecY.pdf");
 
 }
 
@@ -1397,12 +1421,12 @@ void plotJets()
 
    //plotRatioPDFs("patrickNew16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
 
-   //plotRatioPDFs("data16ak7", "nnlo", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
+   plotRatioPDFs("data16ak7", "nnlo", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
    //plotRatioPDFs("16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
 
-   plotRatioPDFsY("patrickNew16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
+   //plotRatioPDFsY("patrickNew16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
 
-   // plotRatioY("patrickNew16ak4", "CT14nnlo");
+   //plotRatioY("patrickNew16ak4", "CT14nnlo");
 
    return;
    //plotRatio("patrickNew16ak4", "CT14nnlo"); 

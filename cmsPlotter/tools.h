@@ -7,6 +7,9 @@
 #include <map>
 #include <algorithm>
 
+
+const vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1.0",  "1.0 < |y| < 1.5", "1.5 < |y| < 2.0", "2.0 < |y| < 2.5"};
+
 inline std::vector<double> getRange(double asMin, double asMax, double st = 0.001)
 {
     std::vector<double> v;
@@ -55,7 +58,7 @@ static const std::map<TString, std::vector<double> > pdfAsVals =  {
 //Apply NP + EW corrections to theory
 inline void applyNPEW(TH1D *h, int y,  TString Tag)
 {
-    TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
+    static TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
 
     int year = Tag.Contains("15") ? 15 : 16;
 
@@ -104,14 +107,14 @@ inline void applyNPEW(TH1D *h, int y,  TString Tag)
         h->SetBinContent(i, v);
         h->SetBinError(i, err);
     }
-    fNPEW->Close();
+    //fNPEW->Close();
 }
 
 
 //Apply NNLO or NLL k-factor
 void applyKfactor(TH1D *h, int y,  TString Tag)
 {
-    TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
+    static TFile *fNPEW  = TFile::Open("theorFiles/corrs/np_ew.root");  //NP+EW corrections
 
     TH1D *hCorr = dynamic_cast<TH1D*>( fNPEW->Get(Tag + Form("_y%d",  y)));
     if(!hCorr) {
@@ -134,7 +137,7 @@ void applyKfactor(TH1D *h, int y,  TString Tag)
         h->SetBinContent(i, v);
         h->SetBinError(i, err);
     }
-    fNPEW->Close();
+    //fNPEW->Close();
 }
 
 TGraphAsymmErrors *getBand(TH1D *hCnt, TH1D *hUp, TH1D *hDn)

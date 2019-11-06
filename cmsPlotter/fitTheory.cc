@@ -59,7 +59,6 @@ TString rn() {return Form("%d",rand());}
 
 using namespace std;
 
-const TString year = "16ak4";
 
 TFile *fTh = nullptr;
 
@@ -197,7 +196,8 @@ struct asFitter {
 
 
     //Read theory histogram pdfName, as and scale variation s (the NP/EW corrections are applied)
-    static vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s, TString order = "nll")
+    //tag for example 16ak4 or 16ak7
+    static vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s, TString tag, TString order = "nll")
     {
 
         int asI = round(as*1000);
@@ -229,9 +229,15 @@ struct asFitter {
 
         for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
             for(int y = 0; y < 5; ++y) {
-                applyNPEW(vTh[ipdf][y],  y, year);
-                if(order.Contains("nll")) applyKfactor(vTh[ipdf][y], y, "kFactorNLL_ak4");
-                else if(order.Contains("nnlo")) applyKfactor(vTh[ipdf][y], y, "kFactorNNLO_ak4");
+                applyNPEW(vTh[ipdf][y],  y, tag);
+
+                TString tagN = tag;
+                if(tag.Contains("ak4")) tagN = "_ak4";
+                else if(tag.Contains("ak7")) tagN = "_ak7";
+                else assert(0);
+
+                if(order.Contains("nll")) applyKfactor(vTh[ipdf][y], y, "kFactorNLL"+tagN);
+                else if(order.Contains("nnlo")) applyKfactor(vTh[ipdf][y], y, "kFactorNNLO"+tagN);
                 //else if(order.Contains("nlo"))
                 //applyKfactor(vTh[ipdf][y], y, "kFactorNNLO_ak4");
             }
@@ -241,25 +247,25 @@ struct asFitter {
     }
 
     //Read theory histograms for PDF pdfName (all alphaS (as) and all scale choices (s))
-    void readAllTheory(TString pdfName, TString order) {
+    void readAllTheory(TString pdfName, TString tag, TString order) {
         for(auto as: pdfAsVals.at(pdfName)) {
             cout << pdfName <<" "<< as << endl;
             int asI = round(as*1000);
             thHists[pdfName][asI].resize(7);
             for(int s = 0; s < 7; ++s)
-                thHists[pdfName][asI][s] = readHistos(pdfName, as, s, order);
+                thHists[pdfName][asI][s] = readHistos(pdfName, as, s, tag, order);
         }
     }
 
     //Read theory histograms for PDF pdfName 
-    void readSingleTheory(TString pdfName, TString order) {
+    void readSingleTheory(TString pdfName, TString tag, TString order) {
         for(auto as: pdfAsVals.at(pdfName)) {
             int asI = round(as*1000);
             if(asI != 118) continue;
             cout << pdfName <<" "<< as << endl;
             thHists[pdfName][asI].resize(1);
             for(int s = 0; s < 1; ++s)
-                thHists[pdfName][asI][s] = readHistos(pdfName, as, s, order);
+                thHists[pdfName][asI][s] = readHistos(pdfName, as, s, tag, order);
         }
     }
 
@@ -305,7 +311,7 @@ struct asFitter {
                     p.thErrs.push_back(diff);
                 }
             }
-            //Assymetrick hessian
+            //Assymetrick hessian - HERAPDF or CT14
             else {
                 for(int i = 0; i < thHist118.size()/2; ++i) { 
                     double thNom = thHist118[0][y]->GetBinContent(binId);
@@ -505,11 +511,13 @@ struct asFitter {
 
     // HERA chi2 fit with theory unc (with fixed shift)
     // http://www-h1.desy.de/psfiles/papers/desy15-039.pdf
+    // iShift - idOf the fixed shift, shVal - its val
     TVectorD getShiftsHERAall(int iShift, double shVal)
     {
         int nErr = data[0].errs.size() + data[0].thErrs.size();
-        int nErrN= nErr-1;
+        int nErrN= nErr-1; //new number of entries
 
+        //map: newIndex -> oldIndex
         vector<double> indxMap;
         for(int i = 0; i < nErr; ++i) {
             if(i == iShift) continue;
@@ -527,7 +535,7 @@ struct asFitter {
             double C =  m*mu*pow(p.errStat,2) + m*m*pow(p.errUnc,2);
             for(int j = 0; j < nErrN; ++j)
             for(int k = 0; k < nErrN; ++k) {
-                int jG = indxMap[j];
+                int jG = indxMap[j]; //to old index
                 int kG = indxMap[k];
                 double thJ = (jG < p.errs.size()) ? p.errs[jG] : p.thErrs[jG-p.errs.size()];
                 double thK = (kG < p.errs.size()) ? p.errs[kG] : p.thErrs[kG-p.errs.size()];
@@ -537,7 +545,8 @@ struct asFitter {
             for(int j = 0; j < nErrN; ++j) {
                 int jG = indxMap[j];
                 double thJ = (jG < p.errs.size()) ? p.errs[jG] : p.thErrs[jG-p.errs.size()];
-                yVec(j) += - 1./C * (p.sigma - m) * m * thJ;
+                double thI = (iShift < p.errs.size()) ? p.errs[iShift] : p.thErrs[iShift-p.errs.size()];
+                yVec(j) += - 1./C * (mu - m + shVal*thI*m) * m * thJ; //including the fixed shift
             }
 
         }
@@ -556,7 +565,6 @@ struct asFitter {
             shNew(indxMap[i]) = sh(i);
         }
         shNew(iShift) = shVal;
-
 
         return shNew;
     }
@@ -1083,6 +1091,27 @@ struct asFitter {
 
         auto shifts  = getShiftsHERAall();
         double chi2H = getChi2HERAall(shifts);
+
+        //Uncertainties of the shifts
+        TVectorD shiftsUnc(shifts.GetNrows());
+        for(int i = 0; i < shifts.GetNrows(); ++i) {
+            auto shiftsU  = getShiftsHERAall(i, shifts(i)+1); //up-variation
+            double dChi2 = getChi2HERAall(shiftsU) - chi2H;
+            shiftsUnc(i) = 1./sqrt(dChi2);
+        }
+        
+
+        /*
+        auto shiftsT   = getShiftsHERAall(0, shifts(0));
+        auto shiftsTU  = getShiftsHERAall(0, shifts(0)+1);
+        auto shiftsTD  = getShiftsHERAall(0, shifts(0)-1);
+        for(int i = 0; i < shifts.GetNrows(); ++i) {
+            cout << i <<" "<< shifts(i) <<" "<<shiftsT(i) << endl;
+        }
+        cout << "Chi2 comparison " << getChi2HERAall(shifts) <<" : "<< getChi2HERAall(shiftsT) << " "<< getChi2HERAall(shiftsTU)<<" "<< getChi2HERAall(shiftsTD) << endl;
+        exit(0);
+        */
+
         int ndfT  = getNpoints();
         assert(shifts.GetNrows() == nSys + nTh);
 
@@ -1105,11 +1134,9 @@ struct asFitter {
         TH1D *hShifts = new TH1D(rn(), "", shifts.GetNrows(), 0.5, shifts.GetNrows()+0.5);
         for(int i = 0; i < shifts.GetNrows(); ++i) {
             hShifts->SetBinContent(i+1, shifts[i]);
-            hShifts->SetBinError(i+1, 1);
+            hShifts->SetBinError(i+1, shiftsUnc[i]);
             if(i < nSys) hShifts->GetXaxis()->SetBinLabel(i+1, ErrNames[i]);
         }
-
-
 
 
 
@@ -1214,6 +1241,7 @@ struct asFitter {
         TCanvas *can = new TCanvas(rn(), "", 1000, 700);
         SetTopBottom(0.05, 0.15);
         DividePad({1}, {1,1,1,1,1});
+        //DivideTransparent({1}, {1,0,1,0,1,0,1,0.2,1});
 
         //Ratio to theory
         can->cd(1);
@@ -1224,6 +1252,12 @@ struct asFitter {
             auto hDataR = (TH1D*) hData[y]->Clone(rn());
             auto hThShR = (TH1D*) hThShTot[y]->Clone(rn());
             auto hThR   = (TH1D*) hTh[y]->Clone(rn());
+
+            //int ipt = hDataR->FindBin(240);
+            //cout << "Data: " << hDataR->GetBinContent(ipt) << endl;
+            //cout << "NNLO: " << hThR->GetBinContent(ipt) << endl;
+            //exit(0);
+
             hDataR->Divide(hTh[y]);
             hThShR->Divide(hTh[y]);
             hThR->Divide(hTh[y]);
@@ -1233,16 +1267,18 @@ struct asFitter {
             hThR->SetLineColor(kRed);
 
             hThR->Draw();
-            hThShR->Draw("same");
+            hThShR->Draw("same ][");
             hDataR->Draw("same");
             GetYaxis()->SetRangeUser(0.6,1.5);
             GetYaxis()->SetNdivisions(404);
             GetYaxis()->SetTitle("data/theory");
             SetFTO({20}, {10}, {1.3, 1.5, 0.4, 3.4});
+
+            DrawLatexUp(-1.05, yBins[y]);
         }
 
         can->cd(1)->cd(4);
-        DrawLatexUp(1.3, Form("#alpha_{S} = %g : #chi^{2} = %.1f / %d", as, chi2H, ndfT), 20, "c");
+        DrawLatexUp(1.3, Form("#alpha_{S} = %.3f : #chi^{2} = %.1f / %d", as, chi2H, ndfT), 20, "c");
 
 
         //Ratio to shifted theory
@@ -1257,8 +1293,8 @@ struct asFitter {
             hThShR->Divide(hThShTot[y]);
 
             hDataR->SetLineColor(kBlack);
-            hThShR->SetLineColor(kRed);
-            hThShR->Draw();
+            hThShR->SetLineColor(kBlue);
+            hThShR->Draw("][");
             hDataR->Draw("same");
             GetYaxis()->SetRangeUser(0.9,1.1);
             GetYaxis()->SetTitle("data/theory'");
@@ -1289,19 +1325,19 @@ struct asFitter {
 
             for(int s = 0; s < nTh; ++s) {
                 hShTh[s][y]->SetLineColor(kRed);
-                hShTh[s][y]->Draw("same");
+                hShTh[s][y]->Draw("same ][");
             }
 
             for(int s = 0; s < nSys; ++s) {
                 if(shImp.count(s)) continue;
                 hShData[s][y]->SetLineColor(kOrange);
-                hShData[s][y]->Draw("same");
+                hShData[s][y]->Draw("same ][");
             }
             for(auto sEl : shImp) {
                 int s = sEl.first;
                 int c = sEl.second;
                 hShData[s][y]->SetLineColor(c);
-                hShData[s][y]->Draw("same");
+                hShData[s][y]->Draw("same ][");
             }
             hThShR->Draw("same");
 
@@ -1356,18 +1392,18 @@ struct asFitter {
                 int s = sEl.first;
                 int c = sEl.second;
                 hShData[s][y]->SetLineColor(c);
-                hShData[s][y]->Draw("same");
+                hShData[s][y]->Draw("same ][");
             }
 
             hPDFTotSh->SetLineColor(kRed);
-            hPDFTotSh->Draw("same");
+            hPDFTotSh->Draw("same ][");
 
             hDataTotSh->SetLineColor(kOrange);
-            hDataTotSh->Draw("same");
+            hDataTotSh->Draw("same ][");
 
 
             hThShR->SetLineColor(kBlack);
-            hThShR->Draw("same");
+            hThShR->Draw("same ][");
 
             GetYaxis()->SetRangeUser(-0.2,0.2);
             GetYaxis()->SetNdivisions(404);
@@ -1454,7 +1490,7 @@ int main(int argc, char** argv)
     //TString curPDF = "ABMP16_5_nnlo";
     //TString curPDF = "HERAPDF20_NNLO";
 
-    asfit.readAllTheory(curPDF, "nll");
+    asfit.readAllTheory(curPDF, "16ak7", "nnlo");
     //asfit.readSingleTheory("ABMP16_5_nnlo");
     //asfit.readSingleTheory("MMHT2014nnlo68cl");
 
@@ -1475,6 +1511,7 @@ int main(int argc, char** argv)
 
     for(auto as: pdfAsVals.at(curPDF))
         asfit.plotReview(curPDF, as, 0);
+    //asfit.plotReview(curPDF, 0.118, 0);
     return 0;
 
     for(auto as: pdfAsVals.at(curPDF)) {
