@@ -299,7 +299,7 @@ vector<vector<TH1D*>> getPDFuncHistos(fastNLOAlphas &fnlo)
     int nPDFs = fnlo.GetNPDFMembers();
     TString pdfName = fnlo.GetLHAPDFFilename();
     cout << pdfName << endl;
-    double Fact = pdfName.Contains("CT14") ? 1.65 : 1;
+    double Fact = pdfName.Contains("CT14") ? 1.645 : 1;
 
     vector<vector<TH1D*>> histos;
     for(int i = 0; i < nPDFs; ++i) {

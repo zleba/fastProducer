@@ -7,6 +7,7 @@
 //********************************************************************
 #include <iostream>
 #include <vector>
+#include <set>
 #include <iomanip>
 #include <string>
 #include <cmath>
@@ -35,9 +36,14 @@ using namespace PlottingHelper;
 
 #include "tools.h"
 
-
+/*
 const vector<TString> ErrNames = {
 "nperr", "lumi", "AbsoluteStat",  "AbsoluteScale",  "AbsoluteMPFBias",  "Fragmentation",  "SinglePionECAL",  "SinglePionHCAL",  "FlavorQCD",  "TimePtEta",  "RelativeJEREC1",  "RelativeJEREC2",  "RelativeJERHF",  "RelativePtBB",  "RelativePtEC1",  "RelativePtEC2", "RelativePtHF",  "RelativeBal",  "RelativeSample",  "RelativeFSR",  "RelativeStatFSR",  "RelativeStatEC",  "RelativeStatHF",  "PileUpDataMC",  "PileUpPtRef",  "PileUpPtBB",  "PileUpPtEC1",  "PileUpPtEC2",  "PileUpPtHF",  "fake",  "miss",  "JER",  "PUprof"};
+*/
+
+const vector<TString> ErrNames = {
+"NPerr", "Lumi", "AbsStat",  "AbsScale",  "AbsMPFBias",  "Frag",  "SinglePionECAL",  "SinglePionHCAL",  "FlavorQCD",  "TimePtEta",  "RelJEREC1",  "RelJEREC2",  "RelJERHF",  "RelPtBB",  "RelPtEC1",  "RelPtEC2", "RelPtHF",  "RelBal",  "RelSample",  "RelFSR",  "RelStatFSR",  "RelStatEC",  "RelStatHF",  "PUDataMC",  "PUPtRef",  "PUPtBB",  "PUPtEC1",  "PUPtEC2",  "PUPtHF",  "fake",  "miss",  "JER",  "PUprof"};
+
 
 
 
@@ -158,8 +164,8 @@ struct asFitter {
 
             //p.sigma *= 0.97; //RADEK test
 
-            if(abs(p.yMin - 0) < 0.1) //first y-bin 0.5% //RADEK change
-                p.errUnc /= 2;
+            //if(abs(p.yMin - 0) < 0.1) //first y-bin 0.5% //RADEK change
+                //p.errUnc /= 2;
 
             vector<double> unc;
             iss >> nPerL >> nPerH >> lumi;
@@ -191,7 +197,7 @@ struct asFitter {
 
 
     //Read theory histogram pdfName, as and scale variation s (the NP/EW corrections are applied)
-    static vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s)
+    static vector<vector<TH1D*>> readHistos(TString pdfName, double as, int s, TString order = "nll")
     {
 
         int asI = round(as*1000);
@@ -224,7 +230,9 @@ struct asFitter {
         for(int ipdf = 0; ipdf < vTh.size(); ++ipdf) {
             for(int y = 0; y < 5; ++y) {
                 applyNPEW(vTh[ipdf][y],  y, year);
-                applyKfactor(vTh[ipdf][y], y, "kFactorNLL_ak4");
+                if(order.Contains("nll")) applyKfactor(vTh[ipdf][y], y, "kFactorNLL_ak4");
+                else if(order.Contains("nnlo")) applyKfactor(vTh[ipdf][y], y, "kFactorNNLO_ak4");
+                //else if(order.Contains("nlo"))
                 //applyKfactor(vTh[ipdf][y], y, "kFactorNNLO_ak4");
             }
         }
@@ -233,25 +241,25 @@ struct asFitter {
     }
 
     //Read theory histograms for PDF pdfName (all alphaS (as) and all scale choices (s))
-    void readAllTheory(TString pdfName) {
+    void readAllTheory(TString pdfName, TString order) {
         for(auto as: pdfAsVals.at(pdfName)) {
             cout << pdfName <<" "<< as << endl;
             int asI = round(as*1000);
             thHists[pdfName][asI].resize(7);
             for(int s = 0; s < 7; ++s)
-                thHists[pdfName][asI][s] = readHistos(pdfName, as, s);
+                thHists[pdfName][asI][s] = readHistos(pdfName, as, s, order);
         }
     }
 
     //Read theory histograms for PDF pdfName 
-    void readSingleTheory(TString pdfName) {
+    void readSingleTheory(TString pdfName, TString order) {
         for(auto as: pdfAsVals.at(pdfName)) {
             int asI = round(as*1000);
             if(asI != 118) continue;
             cout << pdfName <<" "<< as << endl;
             thHists[pdfName][asI].resize(1);
             for(int s = 0; s < 1; ++s)
-                thHists[pdfName][asI][s] = readHistos(pdfName, as, s);
+                thHists[pdfName][asI][s] = readHistos(pdfName, as, s, order);
         }
     }
 
@@ -289,14 +297,25 @@ struct asFitter {
             }
             */
 
-            for(int i = 0; i < thHist118.size()/2; ++i) { 
-                double thNom = thHist118[0][y]->GetBinContent(binId);
-                double diff = (thHist118[2*i+1][y]->GetBinContent(binId) - thHist118[2*i+2][y]->GetBinContent(binId)) / thNom;
+            //Symetric hessian
+            if(pdfName.Contains("ABMP16") || pdfName.Contains("NNPDF31")) {
+                for(int i = 1; i < thHist118.size(); ++i) { 
+                    double thNom = thHist118[0][y]->GetBinContent(binId);
+                    double diff = (thHist118[i][y]->GetBinContent(binId) - thNom) / thNom;
+                    p.thErrs.push_back(diff);
+                }
+            }
+            //Assymetrick hessian
+            else {
+                for(int i = 0; i < thHist118.size()/2; ++i) { 
+                    double thNom = thHist118[0][y]->GetBinContent(binId);
+                    double diff = (thHist118[2*i+1][y]->GetBinContent(binId) - thHist118[2*i+2][y]->GetBinContent(binId)) / thNom;
 
-                if(pdfName.Contains("CT14")) //CT14
-                    p.thErrs.push_back(diff/2 * 1./1.645);
-                else
-                    p.thErrs.push_back(diff/2);
+                    if(pdfName.Contains("CT14")) //CT14
+                        p.thErrs.push_back(diff/2 * 1./1.645);
+                    else
+                        p.thErrs.push_back(diff/2);
+                }
             }
 
 
@@ -484,6 +503,67 @@ struct asFitter {
     }
 
 
+    // HERA chi2 fit with theory unc (with fixed shift)
+    // http://www-h1.desy.de/psfiles/papers/desy15-039.pdf
+    TVectorD getShiftsHERAall(int iShift, double shVal)
+    {
+        int nErr = data[0].errs.size() + data[0].thErrs.size();
+        int nErrN= nErr-1;
+
+        vector<double> indxMap;
+        for(int i = 0; i < nErr; ++i) {
+            if(i == iShift) continue;
+            indxMap.push_back(i);
+        }
+        
+        TMatrixD mat(nErrN, nErrN);
+        TVectorD yVec(nErrN);
+        //Calculate the optimal shifts
+        for(const auto &p : data) {
+            if(!Cut(p)) continue;
+
+            double m  = p.th;
+            double mu = p.sigma;
+            double C =  m*mu*pow(p.errStat,2) + m*m*pow(p.errUnc,2);
+            for(int j = 0; j < nErrN; ++j)
+            for(int k = 0; k < nErrN; ++k) {
+                int jG = indxMap[j];
+                int kG = indxMap[k];
+                double thJ = (jG < p.errs.size()) ? p.errs[jG] : p.thErrs[jG-p.errs.size()];
+                double thK = (kG < p.errs.size()) ? p.errs[kG] : p.thErrs[kG-p.errs.size()];
+                mat(j,k) += 1./C * m*m * thJ*thK;
+            }
+
+            for(int j = 0; j < nErrN; ++j) {
+                int jG = indxMap[j];
+                double thJ = (jG < p.errs.size()) ? p.errs[jG] : p.thErrs[jG-p.errs.size()];
+                yVec(j) += - 1./C * (p.sigma - m) * m * thJ;
+            }
+
+        }
+
+        for(int j = 0; j < nErrN; ++j)
+            mat(j,j) += 1;
+
+        //Solve 
+        TDecompSVD svd(mat);
+        Bool_t ok;
+        const TVectorD sh = svd.Solve(yVec, ok);
+
+        //Inser the fixed value to the shifts
+        TVectorD shNew(nErr); 
+        for(int i = 0; i < nErrN; ++i) {
+            shNew(indxMap[i]) = sh(i);
+        }
+        shNew(iShift) = shVal;
+
+
+        return shNew;
+    }
+
+
+
+
 
 
 
@@ -570,6 +650,7 @@ struct asFitter {
             //chi2 += pow(mu - m  + corErr*m, 2) / C;
             chi2 += pow(m   - corErr*m  - mu, 2) / C;
 
+            //Log penalty
             chi2 += log(C / ((pow(p.errStat,2)+pow(p.errUnc,2))*mu*mu));
         }
 
@@ -578,6 +659,43 @@ struct asFitter {
 
         return chi2;
     }
+
+
+    //With theory, but without correlated part
+    pair<double,double> getChi2HERAallPartial(const TVectorD &s)
+    {
+        assert(data[0].errs.size() + data[0].thErrs.size() == s.GetNrows());
+
+        //Evaluate the chi2
+        double chi2Lin = 0;
+        double chi2Log = 0;
+        for(const auto &p : data) {
+            if(!Cut(p)) continue;
+
+            double m   = p.th;
+            double mu  = p.sigma;
+            //double th  = p.th;
+            //double ref = p.sigma;
+            double corErr = 0;
+            for(int i = 0; i < p.errs.size() + p.thErrs.size(); ++i) {
+                double thI = (i < p.errs.size()) ? p.errs[i] : p.thErrs[i-p.errs.size()];
+                corErr += s(i) * thI;
+            }
+
+            double C = m*mu*pow(p.errStat,2) + m*m*pow(p.errUnc,2);
+            //chi2 += pow(mu - m  + corErr*m, 2) / C;
+            chi2Lin += pow(m   - corErr*m  - mu, 2) / C;
+
+            //Log penalty
+            chi2Log += log(C / ((pow(p.errStat,2)+pow(p.errUnc,2))*mu*mu));
+        }
+
+        //for(int j = 0; j < data[0].errs.size() + data[0].thErrs.size(); ++j)
+            //chi2 += pow(s(j),2);
+
+        return {chi2Lin, chi2Log};
+    }
+
 
 
 
@@ -953,11 +1071,34 @@ struct asFitter {
 
     void plotReview(TString pdfName, double as, int scale = 0)
     {
+        const int nYbins = 4;
+        Cut = [](point p) { return ( abs(p.yMin) < 0.5*(nYbins-0.9) &&  p.sigma != 0 && p.ptMin > 95);};
+
         gStyle->SetOptStat(0);
         fillTheory(pdfName, as, scale);
 
+
+        int nSys = data[0].errs.size();
+        int nTh  = data[0].thErrs.size();
+
         auto shifts  = getShiftsHERAall();
         double chi2H = getChi2HERAall(shifts);
+        int ndfT  = getNpoints();
+        assert(shifts.GetNrows() == nSys + nTh);
+
+
+        //Get chi2 for all rap bins
+
+        vector<double> chi2NY(nYbins), chi2LY(nYbins);
+        vector<int> ndfY(nYbins);
+        for(int y = 0; y < nYbins; ++y) {
+            Cut = [y](point p) { return ( round(abs(2*p.yMin)) == y &&  p.sigma != 0 && p.ptMin > 95);};
+            tie(chi2NY[y],chi2LY[y]) = getChi2HERAallPartial(shifts);
+            ndfY[y]  = getNpoints();
+        }
+
+
+
 
 
         //Shifts to histogram
@@ -965,17 +1106,19 @@ struct asFitter {
         for(int i = 0; i < shifts.GetNrows(); ++i) {
             hShifts->SetBinContent(i+1, shifts[i]);
             hShifts->SetBinError(i+1, 1);
+            if(i < nSys) hShifts->GetXaxis()->SetBinLabel(i+1, ErrNames[i]);
         }
 
 
 
-        const int nYbins = 4;
+
+
 
         //Get binning of the data
         vector<vector<double>> bins(nYbins);
         for(auto p : data) {
             int y = round(p.yMin*2);
-            if(y >= nYbins) continue;
+            if(y >= nYbins || p.ptMin < 95) continue;
             bins[y].push_back(p.ptMin);
             bins[y].push_back(p.ptMax);
         }
@@ -985,15 +1128,30 @@ struct asFitter {
             bin.resize(distance(bin.begin(), it));
         }
 
+        //Init all histograms
         vector<TH1D*> hData(nYbins);
         vector<TH1D*> hTh(nYbins);
-        vector<TH1D*> hThSh(nYbins);
+        vector<TH1D*> hThShTot(nYbins);
+        vector<vector<TH1D*>> hShData(nSys);
+        vector<vector<TH1D*>> hShTh(nTh);
 
         for(int y = 0; y < nYbins; ++y) {
            hData[y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
            hTh[y]   = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
-           hThSh[y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+           hThShTot[y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+           for(int s = 0; s < nSys; ++s) {
+               hShData[s].resize(nYbins);
+               hShData[s][y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+           }
+
+           for(int s = 0; s < nTh; ++s) {
+               hShTh[s].resize(nYbins);
+               hShTh[s][y] = new TH1D(rn(), "", bins[y].size()-1, bins[y].data()); 
+           }
         }
+
+
+
 
 
         //Fill theory and data
@@ -1009,20 +1167,53 @@ struct asFitter {
 
             //Fill shifted theory
             double shTot = 0;
-            for(int i = 0; i < p.errs.size(); ++i)
-                shTot += p.errs[i]*shifts[i]*p.th;
+            for(int s = 0; s < p.errs.size(); ++s) {
+                shTot += p.errs[s]*shifts[s]*p.th;
+                hShData[s][y]->SetBinContent(ipt, -p.errs[s]*shifts[s]);
+                hShData[s][y]->SetBinError(ipt, 0);
+            }
                 
-            for(int i = 0; i < p.thErrs.size(); ++i)
-                shTot += p.thErrs[i]*shifts[p.errs.size()+i]*p.th;
-            hThSh[y]->SetBinContent(ipt, p.th-shTot);
-            hThSh[y]->SetBinError(ipt, 0);
+            for(int s = 0; s < p.thErrs.size(); ++s) {
+                shTot += p.thErrs[s]*shifts[p.errs.size()+s]*p.th;
+                hShTh[s][y]->SetBinContent(ipt, -p.thErrs[s]*shifts[p.errs.size()+s]);
+                hShTh[s][y]->SetBinError(ipt, 0);
+            }
+            hThShTot[y]->SetBinContent(ipt, p.th-shTot);
+            hThShTot[y]->SetBinError(ipt, 0);
 
         }
         
 
+        //Get important data shifts
+        map<double,int> shImportance;
+        for(int s = 0; s < nSys; ++s) {
+            double M = -1e10;
+            for(int y = 0; y < nYbins; ++y) {
+                M = max(M, abs(hShData[s][y]->GetBinContent(2)));
+                M = max(M, abs(hShData[s][y]->GetBinContent(5)));
+                M = max(M, abs(hShData[s][y]->GetBinContent(10)));
+            }
+            shImportance[M] = s;
+        }
+        auto it = shImportance.begin();
+        cout << "Radek start " << shImportance.size() <<" "<< nSys <<endl;
+        std::advance(it, shImportance.size()-5);
+        shImportance.erase(shImportance.begin(), it);
+        cout << "Radek after " << shImportance.size() << endl;
+        map<int,int> shImp;
+        vector<int> myCols = {kBlue, kGreen+2, kYellow+2, kViolet, kCyan+2,
+                         kPink+6, kOrange+3, kAzure-4, kGray+3, kGreen-6};
+        int ic = 0;
+        for(auto s : shImportance) {
+            //cout << "Radek insering " << s.second << endl;
+            shImp[s.second] = myCols[ic++];
+        }
+
+
 
         TCanvas *can = new TCanvas(rn(), "", 1000, 700);
-        DividePad({1}, {1,1,1});
+        SetTopBottom(0.05, 0.15);
+        DividePad({1}, {1,1,1,1,1});
 
         //Ratio to theory
         can->cd(1);
@@ -1031,7 +1222,7 @@ struct asFitter {
             can->cd(1)->cd(y+1);
             gPad->SetLogx();
             auto hDataR = (TH1D*) hData[y]->Clone(rn());
-            auto hThShR = (TH1D*) hThSh[y]->Clone(rn());
+            auto hThShR = (TH1D*) hThShTot[y]->Clone(rn());
             auto hThR   = (TH1D*) hTh[y]->Clone(rn());
             hDataR->Divide(hTh[y]);
             hThShR->Divide(hTh[y]);
@@ -1045,7 +1236,14 @@ struct asFitter {
             hThShR->Draw("same");
             hDataR->Draw("same");
             GetYaxis()->SetRangeUser(0.6,1.5);
+            GetYaxis()->SetNdivisions(404);
+            GetYaxis()->SetTitle("data/theory");
+            SetFTO({20}, {10}, {1.3, 1.5, 0.4, 3.4});
         }
+
+        can->cd(1)->cd(4);
+        DrawLatexUp(1.3, Form("#alpha_{S} = %g : #chi^{2} = %.1f / %d", as, chi2H, ndfT), 20, "c");
+
 
         //Ratio to shifted theory
         can->cd(2);
@@ -1054,38 +1252,177 @@ struct asFitter {
             can->cd(2)->cd(y+1);
             gPad->SetLogx();
             auto hDataR = (TH1D*) hData[y]->Clone(rn());
-            auto hThShR = (TH1D*) hThSh[y]->Clone(rn());
-            hDataR->Divide(hThSh[y]);
-            hThShR->Divide(hThSh[y]);
+            auto hThShR = (TH1D*) hThShTot[y]->Clone(rn());
+            hDataR->Divide(hThShTot[y]);
+            hThShR->Divide(hThShTot[y]);
 
             hDataR->SetLineColor(kBlack);
             hThShR->SetLineColor(kRed);
             hThShR->Draw();
             hDataR->Draw("same");
             GetYaxis()->SetRangeUser(0.9,1.1);
+            GetYaxis()->SetTitle("data/theory'");
+            GetYaxis()->SetNdivisions(404);
+
+            DrawLatexUp(-1.2, Form("#chi^{2} = %.1f / %d", chi2NY[y]+ chi2LY[y], ndfY[y]),20);
+            SetFTO({20}, {10}, {1.3, 1.5, 0.4, 3.4});
+
+
         }
 
-        //Shifts
+        //Shifts pt-spectra review
         can->cd(3);
+        DividePad(vector<double>(nYbins,1.), {1});
+        for(int y = 0; y < nYbins; ++y) {
+            can->cd(3)->cd(y+1);
+            gPad->SetLogx();
 
-        int nSys = data[0].errs.size();
-        int nTh  = data[0].thErrs.size();
+
+            auto hThShR = (TH1D*) hThShTot[y]->Clone(rn());
+            hThShR->Divide(hTh[y]);
+            for(int k = 1; k < hThShR->GetNbinsX(); ++k)
+                hThShR->SetBinContent(k, hThShR->GetBinContent(k)-1);
+
+            hThShR->SetLineColor(kBlack);
+            hThShR->Draw("hist");
+
+
+            for(int s = 0; s < nTh; ++s) {
+                hShTh[s][y]->SetLineColor(kRed);
+                hShTh[s][y]->Draw("same");
+            }
+
+            for(int s = 0; s < nSys; ++s) {
+                if(shImp.count(s)) continue;
+                hShData[s][y]->SetLineColor(kOrange);
+                hShData[s][y]->Draw("same");
+            }
+            for(auto sEl : shImp) {
+                int s = sEl.first;
+                int c = sEl.second;
+                hShData[s][y]->SetLineColor(c);
+                hShData[s][y]->Draw("same");
+            }
+            hThShR->Draw("same");
+
+
+            GetYaxis()->SetRangeUser(-0.2,0.2);
+            GetYaxis()->SetNdivisions(404);
+            GetYaxis()->SetTitle("Rel. Unc.");
+            SetFTO({20}, {10}, {1.3, 1.5, 0.4, 3.4});
+
+
+            auto leg = newLegend(kPos1);
+            leg->AddEntry(hThShR, "total shift", "l");
+            DrawLegends({leg}, true);
+        }
+
+
+        //MAIN shifts pt-spectra review
+        can->cd(4);
+        DividePad(vector<double>(nYbins,1.), {1});
+        for(int y = 0; y < nYbins; ++y) {
+            can->cd(4)->cd(y+1);
+            gPad->SetLogx();
+
+            //Total shift
+            auto hThShR = (TH1D*) hThShTot[y]->Clone(rn());
+            hThShR->Divide(hTh[y]);
+            for(int k = 1; k < hThShR->GetNbinsX(); ++k)
+                hThShR->SetBinContent(k, hThShR->GetBinContent(k)-1);
+
+
+            //Total PDF shift
+            auto hPDFTotSh = (TH1D*)hShTh[0][y]->Clone();
+            for(int s = 1; s < nTh; ++s) {
+                hPDFTotSh->Add(hShTh[s][y]);
+            }
+
+            //Total Sys shift (exclusing dominant)
+            auto hDataTotSh = (TH1D*)hShData[0][y]->Clone();
+            hDataTotSh->Reset();
+            for(int s = 0; s < nSys; ++s) {
+                if(shImp.count(s)) continue;
+                hDataTotSh->Add(hShData[s][y]);
+            }
+
+
+            hThShR->Draw("hist");
+
+
+
+            //Main shifts
+            for(auto sEl : shImp) {
+                int s = sEl.first;
+                int c = sEl.second;
+                hShData[s][y]->SetLineColor(c);
+                hShData[s][y]->Draw("same");
+            }
+
+            hPDFTotSh->SetLineColor(kRed);
+            hPDFTotSh->Draw("same");
+
+            hDataTotSh->SetLineColor(kOrange);
+            hDataTotSh->Draw("same");
+
+
+            hThShR->SetLineColor(kBlack);
+            hThShR->Draw("same");
+
+            GetYaxis()->SetRangeUser(-0.2,0.2);
+            GetYaxis()->SetNdivisions(404);
+            GetYaxis()->SetTitle("Rel. Unc.");
+            SetFTO({20}, {10}, {1.3, 1.5, 0.4, 3.4});
+        }
+
+
+        //Shifts
+        can->cd(5);
+
         double chiSys = 0, chiTh = 0;
         for(int i = 0; i < nSys; ++i)
             chiSys += pow(shifts[i],2);
         for(int i = 0; i < nTh; ++i)
             chiTh  += pow(shifts[nSys+i],2);
 
+        hShifts->SetLineColor(kBlack);
         hShifts->Draw();
+
+        //Draw important shifts with corresponding collors
+        for(auto s : shImp) {
+            auto hNow = (TH1D*) hShifts->Clone(rn());
+            for(int i = 1; i <= hNow->GetNbinsX(); ++i) {
+                if(i-1 != s.first) hNow->SetBinContent(i, -1000);
+            }
+            hNow->SetLineColor(s.second);
+            hNow->Draw("same");
+        }
+
+        SetFTO({20}, {10}, {1.3, 1.5, 0.4, 2.8});
+        GetYaxis()->SetRangeUser(-2.9, 3.6);
+        GetYaxis()->SetTitle("shift");
+
         TLine *l = new TLine;
-        l->DrawLine(nSys-0.5, -4, nSys-0.5, 4);
+        l->SetLineStyle(2);
+        l->DrawLine(nSys+0.5, -3, nSys+0.5, 4);
+        l->DrawLine(1+0.5, -3, 1+0.5, 4);
+        l->DrawLine(0.5, -1, nSys+nTh+0.5, -1);
+        l->DrawLine(0.5,  1, nSys+nTh+0.5,  1);
         DrawLatexUp(-1, Form("    Data: #chi^{2} = %.1f / %d", chiSys, nSys), -1, "l");
         DrawLatexUp(-1, Form("PDF: #chi^{2} = %.1f / %d   ", chiTh, nTh), -1, "r");
+        GetYaxis()->SetNdivisions(404);
 
 
-        can->SaveAs("rew.pdf");
 
-
+        int asI = round(1000*as);
+        int asF = round(1000* pdfAsVals.at(pdfName).front());
+        int asB = round(1000* pdfAsVals.at(pdfName).back());
+        if(asI == asF)
+            can->SaveAs("rew.pdf(");
+        else if(asI == asB)
+            can->SaveAs("rew.pdf)");
+        else
+            can->SaveAs("rew.pdf");
     }
 
 };
@@ -1104,17 +1441,20 @@ struct asFitter {
 
 int main(int argc, char** argv)
 {
-    fTh  = TFile::Open("cmsJetsAsScan_ak4.root");  //NLO predictions
+    fTh  = TFile::Open("cmsJetsAsScan_ak7.root");  //NLO predictions
 
 	asFitter asfit;
-    asfit.data = asfit.readData("xFitterTables/patrick16ak4.txt");
+    //asfit.data = asfit.readData("xFitterTables/patrick16ak4.txt");
+    asfit.data = asfit.readData("xFitterTables/data16ak7NewNew.txt");
     //asfit.readAllTheory("CT14nnlo");
     //asfit.readSingleTheory("HERAPDF20_NNLO");
 
     //TString curPDF = "NNPDF31_nnlo";
     TString curPDF = "CT14nnlo";
+    //TString curPDF = "ABMP16_5_nnlo";
+    //TString curPDF = "HERAPDF20_NNLO";
 
-    asfit.readAllTheory(curPDF);
+    asfit.readAllTheory(curPDF, "nll");
     //asfit.readSingleTheory("ABMP16_5_nnlo");
     //asfit.readSingleTheory("MMHT2014nnlo68cl");
 
@@ -1133,7 +1473,8 @@ int main(int argc, char** argv)
     asfit.Cut = [](point p) { return ( abs(p.yMin) < 1.7 &&  p.sigma != 0 && p.ptMin > 96);};
 
 
-    asfit.plotReview(curPDF, 0.118, 0);
+    for(auto as: pdfAsVals.at(curPDF))
+        asfit.plotReview(curPDF, as, 0);
     return 0;
 
     for(auto as: pdfAsVals.at(curPDF)) {
