@@ -2,6 +2,12 @@
 
 #fileName = "data15ak7"
 fileName = "data16p"
+fileName = "data16ak7NewNew"
+fileName = "patrickNew16ak4"
+fileName = "table_16ak7"
+fileName = "table_16ak7new"
+fileName = "table_16ak4_uncorr4"
+fileName = "table_16ak7_april3"
 
 import ROOT
 
@@ -34,7 +40,8 @@ def readTable(fName):
         uncor= l[7]
         #sigma *= 0.987;
 
-        sys= l[10:]
+        #sys= l[10:]
+        sys= l[12:]  #with NPsherpa
         sysH = sqrt(sum([max(0, x)**2 for x in sys]))
         sysL = sqrt(sum([max(0,-x)**2 for x in sys]))
 

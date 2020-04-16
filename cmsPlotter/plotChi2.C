@@ -18,7 +18,7 @@ struct Fitter {
     void load(TString fName) {
         TFile *f = TFile::Open(fName);
         //vector<TString> pdfNames = {"CT14nlo", "HERAPDF20_NLO", "NNPDF31_nnlo"};
-        vector<TString> pdfNames = {"CT14nlo", "NNPDF31_nnlo"};
+        vector<TString> pdfNames = {"CT14nnlo"};//, "NNPDF31_nnlo"};
         for(auto nPdf : pdfNames) {
             vector<vector<TGraph*>> gyVec(7), gptVec(7);
             vector<TGraph*> gVecAll(7);
@@ -26,7 +26,7 @@ struct Fitter {
                 gyVec[s].resize(4);
 
                 for(int y = 0; y < gyVec[s].size(); ++y) {
-                    gyVec[s][y] = (TGraph*) f->Get(nPdf+Form("_Y%d_scale%d", y, s));
+                    gyVec[s][y] = (TGraph*) f->Get(nPdf+Form("_Y%d_scale%d_all", y, s));
                     if(!gyVec[s][y]) {
                         cout << "Histogram cannot be read " << nPdf+Form("_Y%d_scale%d", y, s) << endl;
                         exit(1);
@@ -35,6 +35,7 @@ struct Fitter {
 
                 gptVec[s].resize(ptBinsAs.size()-1);
 
+                /*
                 for(int ipt = 0; ipt < gptVec[s].size(); ++ipt) {
                     gptVec[s][ipt] = (TGraph*) f->Get(nPdf+Form("_Pt%d_scale%d", ipt, s));
                     if(!gptVec[s][ipt]) {
@@ -42,12 +43,13 @@ struct Fitter {
                         exit(1);
                     }
                 }
+                */
 
 
                 gVecAll[s] = (TGraph*) f->Get(nPdf+Form("_scale%d", s));
             }
             grY[nPdf] = gyVec;
-            grPt[nPdf] = gptVec;
+            //grPt[nPdf] = gptVec;
             grAll[nPdf] = gVecAll;
         }
     }
@@ -318,11 +320,11 @@ void plotChi2()
     Fitter fitter;
     fitter.load("chi2.root");
     //fitter.load("chi2noCorr.root");
-    fitter.plotYdep("CT14nlo");
+    fitter.plotYdep("CT14nnlo");
     //fitter.plotYdep("NNPDF31_nnlo");
 
     return;
-    fitter.plotChi2Fit("CT14nlo", 0);
+    fitter.plotChi2Fit("CT14nnlo", 0);
 
 
     //fitter.plotPtDep("CT14nlo");

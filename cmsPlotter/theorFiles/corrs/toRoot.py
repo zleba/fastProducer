@@ -27,7 +27,8 @@ def readTable(fName):
         if "np15" in fName:
             unc = (((l[5] - corr)**2 + (l[6] - corr)**2)/2)**0.5
         elif "np16" in fName:
-            unc = ((l[5]**2 + l[6]**2)/2)**0.5 * 0.01 * corr
+            #unc = ((l[5]**2 + l[6]**2)/2)**0.5 * 0.01 * corr
+            unc = l[5] * 0.01 * corr
 
         if y not in sigmaTab:
             sigmaTab[y] = []
@@ -75,7 +76,7 @@ fOut = ROOT.TFile('np_ew.root', 'RECREATE')
 
 #fileName = "ew15_ak4"
 
-for n in ["ew15_ak4", "ew16_ak4", "ew16_ak7", "np15_ak4", "np16_ak4", "kFactorNLL_ak4", "kFactorNNLO_ak4", "kFactorNLL_ak7", "kFactorNNLO_ak7"]:
+for n in ["ew15_ak4", "ew16_ak4", "ew16_ak7", "np15_ak4", "np16_ak4", "np16_ak7", "kFactorNLL_ak4", "kFactorNNLO_ak4", "kFactorNLL_ak7", "kFactorNNLO_ak7"]:
     corrTab = readTable(n+'.txt')
     writeTable(corrTab, n)
 

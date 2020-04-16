@@ -68,6 +68,48 @@ TH1D *rebin(TH1D *h, TH1D *hTemp) //second is template
     return hNew;
 }
 
+TH1D *rebinToNonZero(TH1D *h, TH1D *hTemp) //second is template, zero bins are removed
+{
+    vector<double> bins;
+    for(int i = 1; i <= hTemp->GetNbinsX(); ++i) {
+        double c = hTemp->GetBinContent(i);
+        if(c > 1e-15) {
+            bins.push_back(hTemp->GetBinLowEdge(i));
+            if(i == hTemp->GetNbinsX())
+                bins.push_back(hTemp->GetBinLowEdge(i) + hTemp->GetBinWidth(i));
+        }
+    }
+
+    TH1D *hNew = new TH1D(rn(), "", bins.size()-1, bins.data());
+    hNew->Reset();
+
+    for(int i = 1; i <= h->GetNbinsX(); ++i) {
+        double xCnt = h->GetBinCenter(i);
+
+        double iBin = hNew->FindBin(xCnt);
+
+        if(iBin == 0 || iBin == hNew->GetNbinsX()+1)
+            continue;
+
+        double v = h->GetBinContent(i);
+        double e = h->GetBinError(i);
+        double w = h->GetBinWidth(i);
+
+        double orgVal = hNew->GetBinContent(iBin);
+        double orgErr = hNew->GetBinError(iBin);
+        hNew->SetBinContent(iBin, orgVal + v*w);
+        hNew->SetBinError(iBin, hypot(orgErr, e*w));
+    }
+
+    hNew->Scale(1, "width");
+    return hNew;
+}
+
+
+
+
+
+
 
 
 //Modify histogram h
@@ -604,11 +646,18 @@ void plotRatio(TString Tag, TString pdf)
         const double magNum = 97; 
         //const double magNum = 74; 
 
+        //if(y == 0) GetXaxis()->SetRangeUser(magNum, 3103);
+        //if(y == 1) GetXaxis()->SetRangeUser(magNum, 2940);
+        //if(y == 2) GetXaxis()->SetRangeUser(magNum, 2787);
+        //if(y == 3) GetXaxis()->SetRangeUser(magNum, 2000);
+        //if(y == 4) GetXaxis()->SetRangeUser(magNum, 1700);
+
         if(y == 0) GetXaxis()->SetRangeUser(magNum, 3103);
-        if(y == 1) GetXaxis()->SetRangeUser(magNum, 2940);
-        if(y == 2) GetXaxis()->SetRangeUser(magNum, 2787);
-        if(y == 3) GetXaxis()->SetRangeUser(magNum, 2000);
-        if(y == 4) GetXaxis()->SetRangeUser(magNum, 1700);
+        if(y == 1) GetXaxis()->SetRangeUser(magNum, 2787);
+        if(y == 2) GetXaxis()->SetRangeUser(magNum, 2500);
+        if(y == 3) GetXaxis()->SetRangeUser(magNum, 1784);
+        if(y == 4) GetXaxis()->SetRangeUser(magNum, 1500);
+
 
 
 
@@ -979,7 +1028,10 @@ void plotRatioPDFs(TString Tag, TString order,  vector<TString> pdfs)
             hTh[i] = rebin(hTh[i], hStat);
             applyNPEW(hTh[i],    y, Tag);
         }
-
+        if(y == 3) {
+            int iBin = hStat->FindBin(1930);
+            cout << iBin << " "<< hStat->GetBinContent(iBin) << " "<< hStat->GetBinLowEdge(iBin) << endl;
+        }
 
 
         for(auto & h : hTh) {
@@ -1052,9 +1104,9 @@ void plotRatioPDFs(TString Tag, TString order,  vector<TString> pdfs)
         //const double magNum = 74; 
 
         if(y == 0) GetXaxis()->SetRangeUser(magNum, 3103);
-        if(y == 1) GetXaxis()->SetRangeUser(magNum, 2940);
-        if(y == 2) GetXaxis()->SetRangeUser(magNum, 2787);
-        if(y == 3) GetXaxis()->SetRangeUser(magNum, 2000);
+        if(y == 1) GetXaxis()->SetRangeUser(magNum, 2787);
+        if(y == 2) GetXaxis()->SetRangeUser(magNum, 2500);
+        if(y == 3) GetXaxis()->SetRangeUser(magNum, 1784);
         if(y == 4) GetXaxis()->SetRangeUser(magNum, 1500);
 
 
@@ -1084,7 +1136,7 @@ void plotRatioPDFs(TString Tag, TString order,  vector<TString> pdfs)
 
         UpdateFrame();
 
-        can->Print(Form("plots/data%s_%s_y%d.pdf", Tag.Data(), "pdfScan", y));
+        can->Print(Form("plots/%s_%s_y%d.pdf", Tag.Data(), "pdfScan", y));
     }
 }
 
@@ -1419,19 +1471,26 @@ void plotJets()
    //compareRatio("16", "16m");
    //compareRatio("16ak7", "15ak7");
 
-   //plotRatioPDFs("patrickNew16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
+   //plotRatioPDFs("data16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
 
-   plotRatioPDFs("data16ak7", "nnlo", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
+   //plotRatioPDFs("data16ak7", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
+   //plotRatioPDFs("table_16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
+
+   //plotRatioPDFs("table_16ak7", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
    //plotRatioPDFs("16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
 
    //plotRatioPDFsY("patrickNew16ak4", "nll", {"CT14nnlo", "HERAPDF20_NNLO", "NNPDF31_nnlo", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"} );
 
    //plotRatioY("patrickNew16ak4", "CT14nnlo");
 
-   return;
+   //plotRatio("table_16ak4", "CT14nnlo"); 
+   //plotRatio("table_16ak4_uncorr4", "CT14nnlo"); 
+   plotRatio("table_16ak7_april3", "CT14nnlo"); 
+
    //plotRatio("patrickNew16ak4", "CT14nnlo"); 
-   plotRatio("data16ak7", "CT14nnlo"); 
-   plotRatio("data16ak7Old", "CT14nnlo"); 
+   //plotRatio("data16ak4", "CT14nnlo"); 
+   //plotRatio("table_16ak4_uncorr4", "CT14nnlo"); 
+   //plotRatio("data16ak7Old", "CT14nnlo"); 
 
    //plotTheorUncAll();
 

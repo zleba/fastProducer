@@ -4,6 +4,8 @@ R__LOAD_LIBRARY($PlH_DIR/plottingHelper_C.so)
 #include "plottingHelper.h"
 using namespace PlottingHelper;//pollute the namespace!
 
+#include "/afs/desy.de/user/z/zlebcr/cms/das/CMSSW_10_2_1/src/Core/CommonTools/interface/Greta.h"
+
 TString rn() {return Form("%d",rand());}
 
 TString year = "16";
@@ -34,7 +36,7 @@ struct corrPlotter {
     //vector<TH1D*> ew15, ew16, np15, np16;
     map<TString,vector<TH1D*>> hCorrs;
 
-    const vector<TString> corrs = {"ew15_ak4", "ew16_ak4", "np15_ak4", "np16_ak4", "ew16_ak7"};
+    const vector<TString> corrs = {"ew15_ak4", "ew16_ak4", "np15_ak4", "np16_ak4", "ew16_ak7", "kFactorNLL_ak4"};
 
     void init() {
         TFile *file = TFile::Open("np_ew.root");
@@ -249,6 +251,78 @@ struct corrPlotter {
         can->SaveAs("plots/NPvsEW.pdf");
     }
 
+
+    void plotNLL()
+    {
+        gStyle->SetOptStat(0);
+        TCanvas *can = new TCanvas(rn(), "",  1000, 350);
+        SetLeftRight(0.05, 0.05);
+        SetTopBottom(0.05, 0.13);
+
+        DividePad({1,1,1,1}, {1});
+
+        for(int y = 0; y < 4; ++y) {
+            TH1D *kf = (TH1D*)hCorrs.at("kFactorNLL_ak4")[y]->Clone(rn());
+
+            for(int i = 1;  i < kf->GetNbinsX(); ++i)
+                kf->SetBinError(i, 0.001);
+
+            can->cd(y+1);
+            gPad->SetLogx();
+
+
+            kf->SetLineColor(kRed);
+            kf->SetLineWidth(2);
+
+
+
+            kf->Draw("][");
+            //ew->Draw("same ][");
+
+            double M;
+            if(y == 0) M = 3103;
+            if(y == 1) M = 2787;
+            if(y == 2) M = 2238;
+            if(y == 3) M = 1784;
+
+            GetFrame()->SetTitle("");
+            GetXaxis()->SetRangeUser(97, M);
+            GetYaxis()->SetRangeUser(0.80, 0.96);
+
+
+            //TF1 *fkf = new TF1(rn(), "exp([0] + [1]*log(x) + [2]*log(x)**2)", 97, M);
+            //kf->Fit(fkf);
+            //fkf->Draw("same");
+            TF1 *fkf = GetSmoothFit (kf, 98, M, 4, false);
+            fkf->Draw("same");
+
+
+            if(y == 3)
+                GetXaxis()->SetTitle("Jet p_{T} (GeV)");
+            GetXaxis()->SetNoExponent();
+            GetXaxis()->SetMoreLogLabels();
+            GetYaxis()->SetTitle("Correction");
+
+            SetFTO({16}, {10}, {1.25, 2.3, 0.3, 3.3});
+
+
+
+
+            TLegend *leg = newLegend(kPos7);
+            leg->AddEntry((TObject*)nullptr, yBins[y], "h");
+            if(y == 0) {
+                leg->AddEntry((TObject*)nullptr, "AK4 jets", "h");
+                leg->AddEntry(kf, "NLL kFac.", "l");
+            }
+            DrawLegends({leg}, false);
+        }
+        //can->SaveAs("plots/NPvsEW.pdf");
+    }
+
+
+
+
+
 };
 
 
@@ -259,8 +333,9 @@ void plotCorrs()
     corrPlotter plt;
 
     plt.init();
-    plt.plotEW("ew16_ak4");
-    plt.plotEW("ew16_ak7");
+    //plt.plotEW("ew16_ak4");
+    //plt.plotEW("ew16_ak7");
+    plt.plotNLL();
 
     //plt.plotYearComp("EW");
     //plt.plotYearComp("NP");

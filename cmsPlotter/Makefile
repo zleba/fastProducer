@@ -47,6 +47,16 @@ checkTables: checkTables.cc
 	$(ROOT_LIBS)   -Wl,-rpath $(FastNLOInstallDir)/lib \
 	-o $@
 
+checkTablesNNLO: checkTablesNNLO.cc
+	$(CC) -g  $^ $(LDFLAGS) -I../PlottingHelper/ \
+	$(ROOT_INCLUDE)  -I$(FastNLOInstallDir)/include -L$(FastNLOInstallDir)/lib -lfastnlotoolkit \
+	-L../PlottingHelper/ -lPlottingHelper -Wl,-rpath,../PlottingHelper   \
+	-I$(LHA_INCLUDE)     \
+	-L$(LHA_LIBS) -lLHAPDF \
+	-Wl,-rpath $(LHA_LIBS) \
+	$(ROOT_LIBS)   -Wl,-rpath $(FastNLOInstallDir)/lib \
+	-o $@
+
 
 plotJets: plotJets.cc
 	$(CC) -g  plotJets.cc $(LDFLAGS) -I../PlottingHelper/ \

@@ -3,12 +3,14 @@
 
 #include "TGraphAsymmErrors.h"
 #include "TH1D.h"
+#include "TFile.h"
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <cassert>
 
 
-const vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1.0",  "1.0 < |y| < 1.5", "1.5 < |y| < 2.0", "2.0 < |y| < 2.5"};
+const std::vector<TString> yBins = {"|y| < 0.5",  "0.5 < |y| < 1.0",  "1.0 < |y| < 1.5", "1.5 < |y| < 2.0", "2.0 < |y| < 2.5"};
 
 inline std::vector<double> getRange(double asMin, double asMax, double st = 0.001)
 {
@@ -18,22 +20,23 @@ inline std::vector<double> getRange(double asMin, double asMax, double st = 0.00
     return v;
 }
 
-inline void myAssertFun(bool cond, string str,   int line, string file)
+inline void myAssertFun(bool cond, std::string str,   int line, std::string file)
 {
     if(!cond) {
-        cout << "myAssert: " << str << endl;
-        cout << "File: " << file << endl;
-        cout << "Issue at line " << line << endl;
+        std::cout << "myAssert: " << str << std::endl;
+        std::cout << "File: " << file << std::endl;
+        std::cout << "Issue at line " << line << std::endl;
         exit(1);
     }
 }
 
+#ifndef assert
 #undef assert
 #define assert(cond) myAssertFun(cond, #cond,  __LINE__, __FILE__)
+#endif
 
 
-
-static const std::vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 2500, 3103};
+static const std::vector<double> ptBinsAs = {97, 174, 272, 395, 548, 737, 967, 1248, 1588, 2000, 3103};
 
 static const std::map<TString, std::vector<double> > pdfAsVals =  {
     {"CT14nlo",  getRange(0.111, 0.123) },
