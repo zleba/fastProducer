@@ -16,6 +16,10 @@ LHA_INCLUDE=$(shell lhapdf-config --incdir)
 
 ARMA_DIR=../arma/install
 
+all: calcTheory
+
+clean: 
+	rm calcTheory
 
 
 # flags and variables
