@@ -26,7 +26,6 @@
 
 using namespace PlottingHelper;
 
-
 // Function prototype for flexible-scale function 
 double Function_Mu(double s1, double s2 );
 double Function_q (double q, double pt );
@@ -181,16 +180,6 @@ vector<TH1D*> getPDFuncHistos(fastNLOAlphas &fnlo)
 //    }
 //}
 
-void SaveHistos(vector<TH1D*> hist,  TString tag, int y)
-{
-    vector<TString> sysTag = {"Cnt", "Up", "Dn"};
-    for(int s = 0; s < hist.size(); ++s) {
-        TString n = tag +"_"+ sysTag[s] +"_"+ Form("y%d", y);
-        hist[s]->SetName(n);
-        hist[s]->Write(n);
-    }
-}
-
 void setNLO(fastNLOAlphas &fnlo)
 {
     fnlo.SetContributionON(fastNLO::kFixedOrder,0,true);
@@ -206,7 +195,10 @@ void calcXsectionsAll(int R, vector<TString> pdfNames)
 
     TFile *fOut = new TFile(Form("theorFiles/cmsJetsNLO_AK%d.root", R), "RECREATE");
 
-    for (int y = 0; y < 5; ++y) {
+    for (int y = 0; y < 5; ++y) { // TODO: 5
+        fOut->cd();
+        auto yDir = fOut->mkdir(Form("ybin%d", y+1));
+        yDir->cd();
 
         cout << "y = " << y << endl;
 
@@ -218,18 +210,27 @@ void calcXsectionsAll(int R, vector<TString> pdfNames)
 
         vector<vector<TH1D*>> histsPDF, histsScl;
         for(auto pdfName: pdfNames) {
+
+            yDir->cd();
+            auto pdfDir = yDir->mkdir(pdfName);
+            pdfDir->cd();
+
             cout << pdfName << endl;
             fastNLOAlphas fnlo(fastName.Data(), pdfName.Data(), 0);
-            setNLO(fnlo);
+            fnlo.SetUnits(fastNLO::kPublicationUnits);
+            fnlo.SetContributionON(fastNLO::kFixedOrder, 0, true); // LO
+            fnlo.SetContributionON(fastNLO::kFixedOrder, 1, true); // NLO
+            bool doNNLO = pdfName.Contains("NNLO") || pdfName.Contains("nnlo");
+            fnlo.SetContributionON(fastNLO::kFixedOrder, 2, doNNLO); // NNLO
 
-            histsPDF.push_back(getPDFuncHistos(fnlo));
-            histsScl.push_back(getScaleuncHistos(fnlo));
-        }
+            auto histPDF = getPDFuncHistos  (fnlo);
+            auto histScl = getScaleuncHistos(fnlo);
 
-        for(int i = 0; i < histsPDF.size(); ++i) {
-            SaveHistos(histsPDF[i], "hist"+  pdfNames[i] + "_PDF", y);
-            SaveHistos(histsScl[i], "hist"+  pdfNames[i] + "_Scl", y);
-            cout << "Saving " << pdfNames[i] << endl;
+            histPDF.at(0)->Write("nominal");
+            histPDF.at(1)->Write("PDFup");
+            histPDF.at(2)->Write("PDFdn");
+            histScl.at(1)->Write("Sclup");
+            histScl.at(2)->Write("Scldn");
         }
     }
     fOut->Close();
@@ -239,8 +240,8 @@ void calcXsectionsAll(int R, vector<TString> pdfNames)
 
 //__________________________________________________________________________________________________________________________________
 
-int main(int argc, char** argv){
-	
+int main(int argc, char** argv)
+{
 
     // namespaces
     using namespace std;
@@ -249,8 +250,8 @@ int main(int argc, char** argv){
 
 	SetGlobalVerbosity(ERROR);
 
-    calcXsectionsAll(4, {"CT14nlo"/*,  "HERAPDF20_NLO_EIG",  "NNPDF31_nlo_as_0118_hessian",  "ABMP16_5_nlo",  "MMHT2014nlo68cl",
-                         "CT14nnlo", "HERAPDF20_NNLO_EIG", "NNPDF31_nnlo_as_0118_hessian", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"*/});
+    calcXsectionsAll(4, {"CT14nlo",  "HERAPDF20_NLO_EIG",  "NNPDF31_nlo_as_0118_hessian",  "ABMP16_5_nlo",  "MMHT2014nlo68cl",
+                         "CT14nnlo", "HERAPDF20_NNLO_EIG", "NNPDF31_nnlo_as_0118_hessian", "ABMP16_5_nnlo", "MMHT2014nnlo68cl"});
 
     //vector<TH1D*> readHisto(fastNLOAlphas &fnlo, TString tabName, TString pdfName)
 
